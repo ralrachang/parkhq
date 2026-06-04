@@ -1,0 +1,12 @@
+# 자격증명/비밀 (절대 커밋 금지)
+.git-credentials
+*.token
+*.pat
+.env
+.env.*
+secrets*
+# OS 잡파일
+.DS_Store
+Thumbs.db
+# OMC 런타임 상태 (커밋 불필요)
+.omc/
