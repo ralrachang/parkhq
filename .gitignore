@@ -8,5 +8,20 @@ secrets*
 # OS 잡파일
 .DS_Store
 Thumbs.db
+# 이미지·스크린샷 (참고/산출 이미지는 public repo에 올리지 않고 로컬 보존)
+*.jpg
+*.jpeg
+*.png
 # OMC 런타임 상태 (커밋 불필요)
 .omc/
+# 작업로그 자동화 런타임 로그 (재생성됨)
+.scripts/worklog_run.log
+.verify_tmp/
+# Work OS 적재물 — 민감 데이터(고객명·금액·세션본문) 절대 커밋 금지
+workos/*.db
+workos/*.db-journal
+workos/*.db-wal
+workos/*.db-shm
+workos/data/
+workos/*.ndjson
+workos/*.html

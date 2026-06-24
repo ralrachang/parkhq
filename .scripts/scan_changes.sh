@@ -17,7 +17,10 @@ echo "ROOT=$ROOT"
 mapfile -d '' FILES < <(find "$ROOT" \
   \( -name '.*' -o -name node_modules -o -name "$OUTNAME" \
      -o -name dist -o -name build -o -name out -o -name '.next' \
-     -o -name __pycache__ -o -name venv -o -name '.venv' \
+     -o -name __pycache__ -o -name 'venv*' -o -name '.venv*' -o -name env \
+     -o -name site-packages -o -name '.tox' -o -name '.mypy_cache' \
+     -o -name '.pytest_cache' -o -name '.ruff_cache' -o -name target \
+     -o -name vendor -o -name Pods -o -name '.gradle' \
      -o -name coverage -o -name '.turbo' -o -name '.cache' \) -prune \
   -o -type f -newermt "$D 00:00:00" ! -newermt "$N 00:00:00" -print0 2>/dev/null)
 
