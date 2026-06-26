@@ -15,7 +15,9 @@ docs/01_next_ops_board.md. 참고 레이아웃: ex.jpg (HAM MEDIA OS '작업 전
 
 신호 계산은 ops_signals.compute()(probe_ops 대체)에 위임 — 단일 출처.
 비프로젝트 버킷(컨테이너 루트·임시 폴더)은 NOISE_NAMES로 격리해 집계 왜곡 방지.
-의존성 0·자체완결 HTML·JS 없음(펼치기는 <details>). 민감(세션제목·고객명) 포함 가능 →
+의존성 0·자체완결 HTML·JS 없음(펼치기는 <details>, 다크/라이트 토글은 순수 CSS :has()).
+기본은 다크, 우상단 버튼으로 라이트 전환(새로고침 시 다크로 초기화 — 기억엔 JS 필요).
+민감(세션제목·고객명) 포함 가능 →
 로컬 전용, 절대 커밋 금지(.gitignore: workos/*.html).
 
 ⚠️ 아래 설정은 사용자 확정 대기(잠정값). 확정되면 이 dict만 고치면 됨:
@@ -85,17 +87,40 @@ KST = timezone(timedelta(hours=9))
 
 CSS = """
 :root{--bg:#0d1117;--card:#161b22;--card2:#1c2230;--bd:#30363d;--fg:#e6edf3;--mut:#8b949e;
---ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--acc:#3b82f6;}
+--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--acc:#3b82f6;
+--badge-bg:#0f2a1a;--badge-fg:#3fb950;--badge-bd:#1f5135;
+--prov-bg:#2a210f;--prov-fg:#e3b341;--prov-bd:#51421f;
+--idle-bg:#3b1d1d;--idle-fg:#ff7b72;--idle-bd:#5c2a2a;
+--act-bg:#1d1a0f;--act-fg:#e3b341;--act-bd:#51421f;
+--tagB:#9fd1ff;--track:#0d1117;--path:#6e7681;--grad2:#60a5fa;
+--warn-tint:rgba(245,158,11,.05);--bad-tint:rgba(239,68,68,.08);}
+/* 라이트 모드 — 우상단 토글(순수 CSS, JS 없음). GitHub 라이트 팔레트. */
+:root:has(#themechk:checked){--bg:#ffffff;--card:#ffffff;--card2:#f3f6f9;--bd:#d0d7de;
+--fg:#1f2328;--mut:#59636e;--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e;--acc:#0969da;
+--badge-bg:#dafbe1;--badge-fg:#1a7f37;--badge-bd:#aceebb;
+--prov-bg:#fff8c5;--prov-fg:#7d4e00;--prov-bd:#eac54f;
+--idle-bg:#ffebe9;--idle-fg:#cf222e;--idle-bd:#ffaba8;
+--act-bg:#fff8c5;--act-fg:#7d4e00;--act-bd:#eac54f;
+--tagB:#0969da;--track:#eaeef2;--path:#6e7781;--grad2:#54aeff;
+--warn-tint:rgba(154,103,0,.07);--bad-tint:rgba(207,34,46,.06);}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font-size:14px;
+body{margin:0;background:var(--bg);color:var(--fg);font-size:14px;transition:background .15s,color .15s;
 font-family:'Pretendard',-apple-system,'Segoe UI',Roboto,'Malgun Gothic',sans-serif}
 .wrap{max-width:1320px;margin:0 auto;padding:24px 20px 70px}
-h1{font-size:21px;margin:0 0 4px}
+h1{font-size:21px;margin:0 0 4px;padding-right:110px}
 .sub{color:var(--mut);font-size:12.5px;line-height:1.6}
-.badge{display:inline-block;background:#0f2a1a;color:#3fb950;border:1px solid #1f5135;
+.badge{display:inline-block;background:var(--badge-bg);color:var(--badge-fg);border:1px solid var(--badge-bd);
 border-radius:6px;padding:2px 9px;font-size:11.5px;font-weight:600;margin-left:6px}
-.prov{display:inline-block;background:#2a210f;color:#e3b341;border:1px solid #51421f;
+.prov{display:inline-block;background:var(--prov-bg);color:var(--prov-fg);border:1px solid var(--prov-bd);
 border-radius:6px;padding:2px 8px;font-size:11px;margin-left:6px}
+.toolbar{position:fixed;top:12px;right:14px;z-index:20}
+.vh{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.themebtn{display:inline-block;cursor:pointer;background:var(--card);border:1px solid var(--bd);
+color:var(--fg);border-radius:8px;padding:6px 11px;font-size:12px;font-weight:600;user-select:none}
+.themebtn:hover{border-color:var(--acc)}
+.themebtn::before{content:"☀️ 라이트"}
+:root:has(#themechk:checked) .themebtn::before{content:"🌙 다크"}
+.vh:focus-visible + .themebtn{outline:2px solid var(--acc);outline-offset:2px}
 .aggbar{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 4px}
 .chip{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:7px 12px;font-size:12.5px}
 .chip b{font-size:15px;font-weight:700}
@@ -112,30 +137,30 @@ border-radius:6px;padding:2px 8px;font-size:11px;margin-left:6px}
 details.pc{background:var(--card);border:1px solid var(--bd);border-radius:9px;
 border-left:3px solid var(--bd);overflow:hidden}
 details.pc.ok{border-left-color:var(--ok)}
-details.pc.warn{border-left-color:var(--warn);background:rgba(245,158,11,.04)}
-details.pc.bad{border-left-color:var(--bad);background:rgba(239,68,68,.07)}
+details.pc.warn{border-left-color:var(--warn);background:var(--warn-tint)}
+details.pc.bad{border-left-color:var(--bad);background:var(--bad-tint)}
 details.pc>summary{list-style:none;cursor:pointer;padding:10px 12px}
 details.pc>summary::-webkit-details-marker{display:none}
 .pname{font-size:13.5px;font-weight:650;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .num{color:var(--mut);font-size:11px;font-variant-numeric:tabular-nums;min-width:16px}
 .dot{font-size:11px}.dot.ok{color:var(--ok)}.dot.warn{color:var(--warn)}.dot.bad{color:var(--bad)}
-.bidle{background:#3b1d1d;color:#ff7b72;border:1px solid #5c2a2a;border-radius:5px;
+.bidle{background:var(--idle-bg);color:var(--idle-fg);border:1px solid var(--idle-bd);border-radius:5px;
 padding:0 6px;font-size:10px;font-weight:600}
 .pmeta{color:var(--mut);font-size:11.5px;margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 10px}
 .pmeta .g{color:var(--fg)}
 .tr.up{color:var(--ok)}.tr.down{color:var(--bad)}.tr.flat{color:var(--mut)}
 .tag{border:1px solid var(--bd);border-radius:5px;padding:0 6px;font-size:10.5px}
-.tag.A{color:var(--ok);border-color:#1f5135}.tag.B{color:#9fd1ff;border-color:#1f3a5c}
-.tag.C{color:var(--warn);border-color:#51421f}
-.tag.none,.tag.gone{color:var(--bad);border-color:#5c2a2a}
+.tag.A{color:var(--ok)}.tag.B{color:var(--tagB)}
+.tag.C{color:var(--warn)}
+.tag.none,.tag.gone{color:var(--bad)}
 .pbody{padding:0 12px 12px;border-top:1px solid var(--bd);margin-top:2px;font-size:12px;color:var(--mut)}
 .pbody .focus{color:var(--fg);margin:8px 0 6px}
 .pbody .fsrc{color:var(--mut);font-size:10.5px}
 .pbody .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}
 .pbody .nums div{background:var(--card2);border-radius:6px;padding:6px 8px}
 .pbody .nums b{color:var(--fg);font-size:13px;display:block}
-.act{margin-top:8px;color:#e3b341;background:#1d1a0f;border:1px solid #51421f;border-radius:6px;padding:7px 9px}
-.path{font-family:ui-monospace,Consolas,monospace;font-size:10.5px;word-break:break-all;color:#6e7681;margin-top:6px}
+.act{margin-top:8px;color:var(--act-fg);background:var(--act-bg);border:1px solid var(--act-bd);border-radius:6px;padding:7px 9px}
+.path{font-family:ui-monospace,Consolas,monospace;font-size:10.5px;word-break:break-all;color:var(--path);margin-top:6px}
 h2{font-size:14px;margin:34px 0 10px}
 details.sec{margin-top:14px;background:var(--card);border:1px solid var(--bd);border-radius:10px}
 details.sec>summary{cursor:pointer;padding:12px 16px;font-weight:600;font-size:13.5px;list-style:none}
@@ -145,8 +170,8 @@ details.sec[open]>summary::before{content:"▾ "}
 .secbody{padding:0 16px 16px}
 .tl{display:flex;align-items:center;gap:10px;margin:5px 0;font-size:11.5px}
 .tl .tln{width:130px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tl .tlt{flex:1;background:#0d1117;border-radius:4px;height:12px;position:relative}
-.tl .tlb{position:absolute;height:100%;background:linear-gradient(90deg,var(--acc),#60a5fa);border-radius:4px;min-width:3px}
+.tl .tlt{flex:1;background:var(--track);border-radius:4px;height:12px;position:relative}
+.tl .tlb{position:absolute;height:100%;background:linear-gradient(90deg,var(--acc),var(--grad2));border-radius:4px;min-width:3px}
 .tl .tld{width:150px;color:var(--mut);text-align:right;font-variant-numeric:tabular-nums}
 .metrics{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px 16px}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
@@ -154,7 +179,7 @@ details.sec[open]>summary::before{content:"▾ "}
 .kpi .v{font-size:20px;font-weight:700}.kpi .l{color:var(--mut);font-size:11px;margin-top:2px}
 .chartwrap{margin-top:14px;overflow-x:auto}
 svg text.dx{fill:var(--mut);font-size:9px;text-anchor:middle}rect.db{fill:var(--acc)}
-a.doclink{color:#9fd1ff;text-decoration:none;font-size:12px}a.doclink:hover{text-decoration:underline}
+a.doclink{color:var(--acc);text-decoration:none;font-size:12px}a.doclink:hover{text-decoration:underline}
 .foot{margin-top:30px;color:var(--mut);font-size:11px;border-top:1px solid var(--bd);padding-top:12px;line-height:1.7}
 .ok-t{color:var(--ok);font-weight:600}
 """
@@ -271,7 +296,7 @@ def tips_html():
             '<div>· <b>문서등급</b>: A(README+가이드+docs) · B(README+가이드) · C(일부) · 없음 · 폴더없음.</div>'
             '<div>· <b>추천 액션</b>: 방치=재점화 브리프, 식어감=주간 점검, 문서부족=보강. (담당 에이전트가 수행 — Phase 3)</div>'
             '<div>· 카드를 클릭하면 초점·세션·토큰·시작일·경로가 펼쳐집니다.</div>'
-            '<div style="margin-top:6px;color:#e3b341">· 카테고리·담당·임계값·문서등급은 <b>잠정값</b>입니다(확정 5건 대기). '
+            '<div style="margin-top:6px;color:var(--prov-fg)">· 카테고리·담당·임계값·문서등급은 <b>잠정값</b>입니다(확정 5건 대기). '
             'ops_board.py 상단 dict에서 조정하세요.</div>'
             '</div></details>')
 
@@ -365,7 +390,10 @@ def main():
     doc = (
         f'<!doctype html><html lang="ko"><head><meta charset="utf-8">'
         f'<meta name="viewport" content="width=device-width,initial-scale=1">'
-        f'<title>PARK HQ Work OS — 작업 전 점검대</title><style>{CSS}</style></head><body><div class="wrap">'
+        f'<title>PARK HQ Work OS — 작업 전 점검대</title><style>{CSS}</style></head><body>'
+        f'<div class="toolbar"><input type="checkbox" id="themechk" class="vh">'
+        f'<label for="themechk" class="themebtn" title="다크/라이트 전환"></label></div>'
+        f'<div class="wrap">'
         f'<h1>PARK HQ Work OS — 작업 전 점검대 '
         f'<span style="color:var(--mut);font-weight:400;font-size:13px">{OS_VERSION}</span>'
         f'<span class="badge">🔒 로컬 전용 · read-only</span></h1>'
