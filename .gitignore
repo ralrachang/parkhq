@@ -11,6 +11,8 @@ Thumbs.db
 # Python 캐시 (재생성됨)
 __pycache__/
 *.pyc
+# Playwright 시각검증 임시 산출물
+.playwright-mcp/
 # 이미지·스크린샷 (참고/산출 이미지는 public repo에 올리지 않고 로컬 보존)
 *.jpg
 *.jpeg

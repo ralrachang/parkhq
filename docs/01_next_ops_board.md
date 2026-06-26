@@ -49,11 +49,23 @@ buildscope-mvp·marketing·output·...`은 진짜 프로젝트가 아니라 하�
    **DB 전체에서 재계산**(distinct cwd → 롤업) → 멱등·부분스캔 면역.
    재적재 결과 **workspaces 64 → projects 22**. 게이트에 G9a~d(롤업 정합) 추가, **16/16 ALL PASS**
    (멱등성 G4 포함, reuse가 fresh와 projects 22==22 동일). `category·agent`는 사용자 확정 대기(NULL).
-2. `probe_ops.py` 로직을 프로젝트 단위로 재계산.
-3. 새 생성기 `ops_board.py`(또는 dashboard.py 확장): 80% 운영 점검대 + 20% 지표 스트립.
-   - 카테고리별 컬럼, 카드별 방치도/추세/문서/현재초점/상태 플래그.
-   - 상단 집계: 전체 · 활발 · 식어감 · 방치 · 점검필요.
-4. **에이전트-환경 레이어**(Phase 3 연결): 카드마다 `담당 에이전트` + `추천 액션`.
+2. ~~`probe_ops.py` 로직을 프로젝트 단위로 재계산.~~
+   ✅ **완료(2026-06-26)** → `workos/ops_signals.py`(probe_ops 대체, 단일 출처). 프로젝트별
+   방치도(오늘/3일/주간/2주/오래)·추세(↑↓= 최근14d vs 직전14d, 상호배타 윈도우)·문서등급(A/B/C/없음)·
+   현재초점(aiTitle 3단 폴백)·세션/사람입력/출력토큰. 날짜는 **KST 통일**(ts 기반·시계무관).
+3. ~~새 생성기 `ops_board.py`: 80% 운영 점검대 + 20% 지표 스트립.~~
+   ✅ **완료(2026-06-26)** → `workos/ops_board.py` → `ops_board.html`(로컬 전용). ex.jpg 레이아웃 재현:
+   헤더·상단집계칩·카테고리 4컬럼 카드(상태 플래그●◆▲·경과일·추세색상·문서등급·번호)·시작일 타임라인·
+   본부문서·활용팁·20% 지표 스트립. 방치 카드 틴트+배지, 컬럼 내 정렬 상태 우선(방치→식어감→활발).
+   비프로젝트 버킷(claude_project·remember project)은 격리. **실프로젝트 20 · 활발 9 · 식어감 3 · 방치 8**.
+4. ~~**에이전트-환경 레이어**: 카드마다 `담당 에이전트` + `추천 액션`.~~
+   ✅ **완료(2026-06-26, 잠정)**: 카테고리→담당(서연 CSO·유나 CTO·하린 CLO) + 프로젝트 오버라이드 훅
+   (`PROJECT_AGENT`) + 카드별 추천 액션(방치=재점화 브리프·식어감=주간점검·문서부족=보강). `projects.category/agent` 채움.
+
+> **검증(2026-06-26)**: 5병렬 적대적 워크플로(데이터 독립 재계산·로직·디자인·매핑·완전성) 실행.
+> 데이터 PASS(22개 전 신호 일치). 지적사항 반영: KST off-by-one·추세 중복·focus 정렬·▲글리프 충돌·
+> 방치 시각강조·도메인우선 매핑(kordoc·AutoIM→부동산, notion/korea-finance→인프라)·비프로젝트 격리.
+> 게이트 **16/16 PASS** 유지. 보류(후속): 민감도 축·상태(수정/승인/읽기) 컬럼·cwd-NULL 세션 완전귀속.
 
 ## 사용자 확정 필요(다음 세션 시작 시 질문)
 1. **카테고리/팀 분류** (제안: 부동산·빌딩 / 제품·플랫폼 / 콘텐츠·실험 / 인프라·내부).
@@ -66,6 +78,8 @@ buildscope-mvp·marketing·output·...`은 진짜 프로젝트가 아니라 하�
 - `docs/00_design.md` — Phase 0 설계(승인됨).
 - `workos/ingest.py` · `verify_gate.py` — Phase 1a 적재+게이트 + **프로젝트 루트 롤업**
   (**16/16 PASS**, G9a~d 추가, 적대적 검증 통과).
+- `workos/ops_signals.py` — 운영 신호 계산(probe_ops 대체, 단일 출처).
+- `workos/ops_board.py` → `ops_board.html` — 운영 점검대(80%+20%+에이전트 레이어, 로컬 전용).
 - `workos/dashboard.py` — Phase 2 지표 대시보드(→ 20% 스트립으로 재활용).
 - `workos.db` `projects` 테이블 — **22개 프로젝트**(롤업 완료). 다음 단계 ops_board의 1차 입력.
   실측 분포(n_records): Building scope 71k · diwolbu 14.5k · building sns 10.8k · builpago 10.4k ·
