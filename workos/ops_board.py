@@ -78,31 +78,29 @@ def recommend(r):
     return "현재 페이스 유지"
 
 STATUS_META = {"활발": ("●", "ok"), "식어감": ("◆", "warn"), "방치": ("▲", "bad")}
-STATUS_RANK = {"방치": 0, "식어감": 1, "활발": 2}      # 컬럼 내 정렬: 소외 우선
 TREND_CLS = {"↑": "up", "↓": "down", "=": "flat"}
 DOC_CLS = {"A": "A", "B": "B", "C": "C", "없음": "none", "경로없음": "gone"}
 DOC_DISP = {"경로없음": "폴더없음"}
-OS_VERSION = "v0.3"
 KST = timezone(timedelta(hours=9))
 
 CSS = """
-:root{--bg:#0d1117;--card:#161b22;--card2:#1c2230;--bd:#30363d;--fg:#e6edf3;--mut:#8b949e;
---ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--acc:#3b82f6;
---badge-bg:#0f2a1a;--badge-fg:#3fb950;--badge-bd:#1f5135;
---prov-bg:#2a210f;--prov-fg:#e3b341;--prov-bd:#51421f;
---idle-bg:#3b1d1d;--idle-fg:#ff7b72;--idle-bd:#5c2a2a;
---act-bg:#1d1a0f;--act-fg:#e3b341;--act-bd:#51421f;
---tagB:#9fd1ff;--track:#0d1117;--path:#6e7681;--grad2:#60a5fa;
---warn-tint:rgba(245,158,11,.05);--bad-tint:rgba(239,68,68,.08);}
-/* 라이트 모드 — 우상단 토글(순수 CSS, JS 없음). GitHub 라이트 팔레트. */
-:root:has(#themechk:checked){--bg:#ffffff;--card:#ffffff;--card2:#f3f6f9;--bd:#d0d7de;
---fg:#1f2328;--mut:#59636e;--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e;--acc:#0969da;
+/* 기본 = 라이트(GitHub 라이트 팔레트). 우상단 토글로 다크 전환(순수 CSS :has, JS 없음). */
+:root{--bg:#ffffff;--card:#ffffff;--card2:#f3f6f9;--bd:#d0d7de;--fg:#1f2328;--mut:#59636e;
+--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e;--acc:#0969da;
 --badge-bg:#dafbe1;--badge-fg:#1a7f37;--badge-bd:#aceebb;
 --prov-bg:#fff8c5;--prov-fg:#7d4e00;--prov-bd:#eac54f;
 --idle-bg:#ffebe9;--idle-fg:#cf222e;--idle-bd:#ffaba8;
 --act-bg:#fff8c5;--act-fg:#7d4e00;--act-bd:#eac54f;
 --tagB:#0969da;--track:#eaeef2;--path:#6e7781;--grad2:#54aeff;
 --warn-tint:rgba(154,103,0,.07);--bad-tint:rgba(207,34,46,.06);}
+:root:has(#themechk:checked){--bg:#0d1117;--card:#161b22;--card2:#1c2230;--bd:#30363d;
+--fg:#e6edf3;--mut:#8b949e;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--acc:#3b82f6;
+--badge-bg:#0f2a1a;--badge-fg:#3fb950;--badge-bd:#1f5135;
+--prov-bg:#2a210f;--prov-fg:#e3b341;--prov-bd:#51421f;
+--idle-bg:#3b1d1d;--idle-fg:#ff7b72;--idle-bd:#5c2a2a;
+--act-bg:#1d1a0f;--act-fg:#e3b341;--act-bd:#51421f;
+--tagB:#9fd1ff;--track:#0d1117;--path:#6e7681;--grad2:#60a5fa;
+--warn-tint:rgba(245,158,11,.05);--bad-tint:rgba(239,68,68,.08);}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font-size:14px;transition:background .15s,color .15s;
 font-family:'Pretendard',-apple-system,'Segoe UI',Roboto,'Malgun Gothic',sans-serif}
@@ -118,8 +116,8 @@ border-radius:6px;padding:2px 8px;font-size:11px;margin-left:6px}
 .themebtn{display:inline-block;cursor:pointer;background:var(--card);border:1px solid var(--bd);
 color:var(--fg);border-radius:8px;padding:6px 11px;font-size:12px;font-weight:600;user-select:none}
 .themebtn:hover{border-color:var(--acc)}
-.themebtn::before{content:"☀️ 라이트"}
-:root:has(#themechk:checked) .themebtn::before{content:"🌙 다크"}
+.themebtn::before{content:"🌙 다크"}
+:root:has(#themechk:checked) .themebtn::before{content:"☀️ 라이트"}
 .vh:focus-visible + .themebtn{outline:2px solid var(--acc);outline-offset:2px}
 .aggbar{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 4px}
 .chip{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:7px 12px;font-size:12.5px}
@@ -241,7 +239,8 @@ def card_html(r, n):
 def column_html(cat, crows):
     csc = Counter(r["status"] for r in crows)
     agent = CATEGORY_AGENT.get(cat, "")
-    srt = sorted(crows, key=lambda r: (STATUS_RANK[r["status"]], -r["out_tok"]))
+    srt = sorted(crows, key=lambda r: (r["days_idle"] if r["days_idle"] is not None else 9999,
+                                       -r["out_tok"]))
     cards = "".join(card_html(r, i + 1) for i, r in enumerate(srt)) or '<div class="sub">— 없음 —</div>'
     head = (f'<div class="colhead"><div class="ct">{esc(cat)}'
             + (f' <span class="ca">· {esc(agent)}</span>' if agent else "")
@@ -353,7 +352,6 @@ def main():
     noise = [r for r in rows if r["is_noise"]]
 
     sc = Counter(r["status"] for r in real)
-    bc = Counter(r["bucket"] for r in real)
     doc_need = sum(1 for r in real if r["doc"] in ("없음", "경로없음"))
     total = len(real)
     gen = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
@@ -363,9 +361,7 @@ def main():
         f'<div class="chip ok"><b>{sc["활발"]}</b> ● 활발</div>'
         f'<div class="chip warn"><b>{sc["식어감"]}</b> ◆ 식어감</div>'
         f'<div class="chip bad"><b>{sc["방치"]}</b> ▲ 방치</div>'
-        f'<div class="chip"><b>{doc_need}</b> 문서 점검필요</div>'
-        f'<div class="chip ok"><b>{bc["오늘"]}</b> 오늘</div>'
-        f'<div class="chip bad"><b>{bc["오래"]}</b> 오래</div>'
+        f'<div class="chip"><b>{doc_need}</b> 문서 점검</div>'
     )
 
     by_cat = {}
@@ -394,16 +390,10 @@ def main():
         f'<div class="toolbar"><input type="checkbox" id="themechk" class="vh">'
         f'<label for="themechk" class="themebtn" title="다크/라이트 전환"></label></div>'
         f'<div class="wrap">'
-        f'<h1>PARK HQ Work OS — 작업 전 점검대 '
-        f'<span style="color:var(--mut);font-weight:400;font-size:13px">{OS_VERSION}</span>'
-        f'<span class="badge">🔒 로컬 전용 · read-only</span></h1>'
-        f'<div class="sub">생성 {gen} (KST) · 기준일 {now_date}(DB max ts) · 데이터 {drange[0]}~{drange[1]} (KST) · '
-        f'적재 무결성 <span class="ok-t">게이트 16/16 PASS</span>'
-        f'<span class="prov">⚠ 카테고리·담당·임계값·문서등급·액션은 잠정(확정 5건 대기)</span></div>'
+        f'<h1>작업 전 점검대<span class="badge">🔒 로컬 전용</span></h1>'
+        f'<div class="sub">기준일 {now_date} · <span class="ok-t">게이트 16/16 PASS</span>'
+        f'<span class="prov">분류·담당 잠정</span></div>'
         f'<div class="aggbar">{aggbar}</div>'
-        f'<div class="legend">상태(컬럼 위=손길 필요): ● 활발(≤3일) · ◆ 식어감(4~14일) · ▲ 방치(15일+) &nbsp;|&nbsp; '
-        f'방치도 버킷: 오늘 / 3일(1~3) / 주간(4~7) / 2주(8~14) / 오래(15+) &nbsp;|&nbsp; '
-        f'추세: ↑증가 · ↓감소 · =정체 (최근14일 vs 직전14일 세션) &nbsp;|&nbsp; 카드 클릭 = 상세</div>'
         f'<div class="cols">{cols}</div>'
         f'{timeline_html(real, now_date)}'
         f'{noise_html}'
@@ -411,8 +401,9 @@ def main():
         f'{tips_html()}'
         f'<h2>지표 (20%) — 전체 활동 요약</h2><div class="metrics">{metrics_body}</div>'
         f'<div class="foot">'
+        f'생성 {gen} (KST) · 데이터 {drange[0]}~{drange[1]} (KST) · 기준일(now)=DB max(ts·KST)={now_date}(시계 무관).<br>'
         f'원천: Claude Code 세션 로그 → workos.db(프로젝트 루트 롤업 {total}개 + 비프로젝트 {len(noise)}개 격리) · '
-        f'무결성 게이트 16/16 PASS · now=DB max(ts·KST)={now_date}(시계 무관) · 토큰=canonical(dedup 진실값).<br>'
+        f'무결성 게이트 16/16 PASS · 토큰=canonical(dedup 진실값).<br>'
         f'80% 운영 점검대(방치 감지) + 20% 지표 + 에이전트 레이어(카테고리→담당 + 카드별 추천 액션).<br>'
         f'보류(후속): 민감도 축(▲민감/◆주의, 분류규칙 필요) · 상태=수정/승인/읽기 컬럼(데이터 갭) · '
         f'cwd-NULL 세션 완전귀속. <b>이 파일은 로컬 전용</b>(세션제목·고객명 포함 가능, 커밋 금지).'
