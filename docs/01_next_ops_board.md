@@ -42,7 +42,13 @@ buildscope-mvp·marketing·output·...`은 진짜 프로젝트가 아니라 하�
 - **활발(오늘)**: Building scope · diwolbu · builpago · building sns · wonbuilding AI TF · Auto IM2.
 
 ## 다음 세션 작업 계획
-1. `ingest.py`에 프로젝트 루트 롤업(`project_id`) 추가 → 재적재 → 게이트 재확인.
+1. ~~`ingest.py`에 프로젝트 루트 롤업(`project_id`) 추가 → 재적재 → 게이트 재확인.~~
+   ✅ **완료(2026-06-26)**: `derive_project()` 추가(컨테이너=`claude_project` 1차 세그먼트,
+   외부 마커=`builpago`, 폴백=정규화 cwd 무손실). `records.project_id` 컬럼 + `projects` 테이블
+   (id·name·root·n_workspaces·n_records·category·agent) 추가. `projects`는 `workspaces`처럼
+   **DB 전체에서 재계산**(distinct cwd → 롤업) → 멱등·부분스캔 면역.
+   재적재 결과 **workspaces 64 → projects 22**. 게이트에 G9a~d(롤업 정합) 추가, **16/16 ALL PASS**
+   (멱등성 G4 포함, reuse가 fresh와 projects 22==22 동일). `category·agent`는 사용자 확정 대기(NULL).
 2. `probe_ops.py` 로직을 프로젝트 단위로 재계산.
 3. 새 생성기 `ops_board.py`(또는 dashboard.py 확장): 80% 운영 점검대 + 20% 지표 스트립.
    - 카테고리별 컬럼, 카드별 방치도/추세/문서/현재초점/상태 플래그.
@@ -58,7 +64,13 @@ buildscope-mvp·marketing·output·...`은 진짜 프로젝트가 아니라 하�
 
 ## 현재 자산(오늘까지)
 - `docs/00_design.md` — Phase 0 설계(승인됨).
-- `workos/ingest.py` · `verify_gate.py` — Phase 1a 적재+게이트(12/12 PASS, 적대적 검증 통과).
+- `workos/ingest.py` · `verify_gate.py` — Phase 1a 적재+게이트 + **프로젝트 루트 롤업**
+  (**16/16 PASS**, G9a~d 추가, 적대적 검증 통과).
 - `workos/dashboard.py` — Phase 2 지표 대시보드(→ 20% 스트립으로 재활용).
-- `workos/workos.db` — 적재 DB(gitignore, 로컬 전용, 860MB).
+- `workos.db` `projects` 테이블 — **22개 프로젝트**(롤업 완료). 다음 단계 ops_board의 1차 입력.
+  실측 분포(n_records): Building scope 71k · diwolbu 14.5k · building sns 10.8k · builpago 10.4k ·
+  Auto IM pptx 9.5k · wonbuilding AI TF 9.0k · Auto IM2 7.1k · remotion_youtube 6.7k · team ERP 5.5k ·
+  worldcup dashboard 5.4k · dungeon writer 4.7k · notion work · Taxpago · yangjae_NI · 데일리 작업로그 ·
+  claude_project(루트 활동) · kordoc · 매수고객관리 · korea-finance · godot · ppt yoon · remember project.
+- `workos/workos.db` — 적재 DB(gitignore, 로컬 전용).
 - scratchpad: `census.py · probe_collision.py · probe_overmerge.py · probe_ops.py`(분석 스크립트, 재사용).

@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS files (        -- 동결 매니페스트(watermark)
 CREATE TABLE IF NOT EXISTS records (
   content_hash   TEXT PRIMARY KEY,
   uuid           TEXT, parent_uuid TEXT, session_id TEXT, rec_type TEXT,
-  cwd            TEXT, workspace_id TEXT, ts TEXT, model TEXT,
+  cwd            TEXT, workspace_id TEXT, project_id TEXT, ts TEXT, model TEXT,
   in_tok INTEGER, out_tok INTEGER, cache_read INTEGER, cache_create INTEGER,
   service_tier TEXT, is_sidechain INTEGER, origin_kind TEXT, prompt_source TEXT,
   request_id TEXT, cc_version TEXT, is_canonical INTEGER NOT NULL DEFAULT 1,
@@ -61,11 +61,22 @@ CREATE INDEX IF NOT EXISTS ix_records_uuid    ON records(uuid);
 CREATE INDEX IF NOT EXISTS ix_records_session ON records(session_id);
 CREATE INDEX IF NOT EXISTS ix_records_type    ON records(rec_type);
 CREATE INDEX IF NOT EXISTS ix_records_ws      ON records(workspace_id);
+CREATE INDEX IF NOT EXISTS ix_records_proj    ON records(project_id);
 
 CREATE TABLE IF NOT EXISTS workspaces (
   workspace_id TEXT PRIMARY KEY, norm_cwd TEXT, raw_cwds TEXT,
   sensitivity TEXT DEFAULT 'internal',
   client_id TEXT, property_id TEXT, deal_id TEXT, erp_category TEXT
+);
+
+CREATE TABLE IF NOT EXISTS projects (    -- 프로젝트 루트 롤업(운영 점검대 단위)
+  project_id   TEXT PRIMARY KEY,
+  project_name TEXT,
+  project_root TEXT,
+  n_workspaces INTEGER,
+  n_records    INTEGER,
+  category     TEXT,        -- 사용자 확정 대기(카테고리/팀 분류)
+  agent        TEXT         -- 담당 에이전트(Phase 3)
 );
 
 CREATE TABLE IF NOT EXISTS tool_calls (
@@ -86,7 +97,7 @@ CREATE TABLE IF NOT EXISTS ingest_runs (
   files_seen INTEGER, raw_lines INTEGER, parse_errors INTEGER,
   exact_dups_dropped INTEGER, rows_stored INTEGER, rows_canonical INTEGER,
   rows_non_canonical INTEGER, raw_out_tok INTEGER, canonical_out_tok INTEGER,
-  distinct_workspaces INTEGER
+  distinct_workspaces INTEGER, distinct_projects INTEGER
 );
 """
 
@@ -103,6 +114,35 @@ def normalize_cwd(cwd):
 
 def ws_id(norm):
     return hashlib.sha1(norm.encode("utf-8")).hexdigest()[:16] if norm else None
+
+# ── 프로젝트 루트 롤업 ───────────────────────────────────────────────
+# workspaces(cwd 정규화)는 하위 폴더(engine·output·_qa·scripts…)로 오염된다(실측 65개).
+# 운영 점검대는 '프로젝트' 단위가 필요하므로 cwd를 프로젝트 루트로 롤업한다(→ 실측 23개).
+#   규칙: 1) 외부 마커 폴더(builpago 등)가 경로에 있으면 그 폴더까지를 루트.
+#         2) 컨테이너(claude_project) 바로 아래 1차 세그먼트가 프로젝트.
+#         3) 둘 다 아니면 정규화 cwd 전체를 자체 프로젝트로(무손실 폴백).
+PROJECT_CONTAINER = "claude_project"       # 프로젝트들이 모여있는 컨테이너 폴더명
+PROJECT_EXTERNAL_MARKERS = ("builpago",)   # 컨테이너 밖이지만 단일 프로젝트로 묶을 폴더명
+
+def derive_project(norm):
+    """정규화 cwd → (project_id, project_name, project_root). norm=None → (None,None,None)."""
+    if not norm:
+        return None, None, None
+    parts = norm.split("\\")
+    low = [p.lower() for p in parts]
+    for marker in PROJECT_EXTERNAL_MARKERS:
+        if marker in low:
+            i = low.index(marker)
+            root = "\\".join(parts[: i + 1])
+            return ws_id(root), parts[i], root
+    if PROJECT_CONTAINER in low:
+        i = low.index(PROJECT_CONTAINER)
+        if i + 1 < len(parts):                  # 컨테이너 바로 아래 1차 세그먼트
+            root = "\\".join(parts[: i + 2])
+            return ws_id(root), parts[i + 1], root
+        root = "\\".join(parts[: i + 1])        # cwd == 컨테이너 루트 자체
+        return ws_id(root), parts[i], root
+    return ws_id(norm), parts[-1], norm         # 폴백: 무손실
 
 def tool_kind(n):
     if n.startswith("mcp__"): return "mcp"
@@ -150,10 +190,10 @@ def main():
     def flush():
         if rec_b:
             cur.executemany("INSERT OR IGNORE INTO records "
-                "(content_hash,uuid,parent_uuid,session_id,rec_type,cwd,workspace_id,ts,model,"
+                "(content_hash,uuid,parent_uuid,session_id,rec_type,cwd,workspace_id,project_id,ts,model,"
                 "in_tok,out_tok,cache_read,cache_create,service_tier,is_sidechain,origin_kind,"
                 "prompt_source,request_id,cc_version,raw_json) VALUES "
-                "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rec_b); rec_b.clear()
+                "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rec_b); rec_b.clear()
         if tool_b:
             cur.executemany("INSERT OR IGNORE INTO tool_calls "
                 "(tool_use_id,content_hash,session_id,tool_name,tool_kind,is_mcp) "
@@ -194,8 +234,9 @@ def main():
                 if rtype == "assistant":
                     raw_out_tok += (usage.get("output_tokens") or 0)
                 origin = o.get("origin") or {}
+                pid = derive_project(ncwd)[0]
                 rec_b.append((ch, o.get("uuid"), o.get("parentUuid"), o.get("sessionId"), rtype,
-                    cwd, ws_id(ncwd), o.get("timestamp"), msg.get("model"),
+                    cwd, ws_id(ncwd), pid, o.get("timestamp"), msg.get("model"),
                     usage.get("input_tokens"), usage.get("output_tokens"),
                     usage.get("cache_read_input_tokens"), usage.get("cache_creation_input_tokens"),
                     usage.get("service_tier"), 1 if o.get("isSidechain") else 0,
@@ -241,23 +282,42 @@ def main():
         FROM records WHERE workspace_id IS NOT NULL GROUP BY workspace_id""")
     con.commit()
 
+    # projects (프로젝트 루트 롤업): DB의 distinct cwd에서 id→(name,root) 매핑을 재구성해
+    # 채운다. workspaces처럼 DB 전체에서 재계산하므로 부분 스캔/멱등 재적재에 면역.
+    cur.execute("DELETE FROM projects")
+    pmap = {}
+    for (cwd,) in cur.execute("SELECT DISTINCT cwd FROM records WHERE cwd IS NOT NULL"):
+        pid, pname, proot = derive_project(normalize_cwd(cwd))
+        if pid is not None:
+            pmap[pid] = (pname, proot)
+    cur.executemany("INSERT INTO projects (project_id,project_name,project_root) VALUES (?,?,?)",
+                    [(pid, nm, rt) for pid, (nm, rt) in pmap.items()])
+    cur.execute("""UPDATE projects SET
+        n_records    = (SELECT COUNT(*) FROM records r WHERE r.project_id = projects.project_id),
+        n_workspaces = (SELECT COUNT(DISTINCT r.workspace_id) FROM records r
+                        WHERE r.project_id = projects.project_id)""")
+    con.commit()
+
     rows = cur.execute("SELECT COUNT(*) FROM records").fetchone()[0]
     canon = cur.execute("SELECT COUNT(*) FROM records WHERE is_canonical=1").fetchone()[0]
     canon_out = cur.execute("SELECT COALESCE(SUM(out_tok),0) FROM records "
                             "WHERE is_canonical=1 AND rec_type='assistant'").fetchone()[0]
     n_ws = cur.execute("SELECT COUNT(*) FROM workspaces").fetchone()[0]
+    n_proj = cur.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
     exact_dups = raw_lines - parse_err - rows
     cur.execute("""INSERT INTO ingest_runs (started_at,finished_at,mode,files_seen,raw_lines,
         parse_errors,exact_dups_dropped,rows_stored,rows_canonical,rows_non_canonical,
-        raw_out_tok,canonical_out_tok,distinct_workspaces) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        raw_out_tok,canonical_out_tok,distinct_workspaces,distinct_projects)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (t0, time.time(), "reuse" if args.reuse_manifest else "fresh", len(files), raw_lines,
-         parse_err, exact_dups, rows, canon, rows-canon, raw_out_tok, canon_out, n_ws))
+         parse_err, exact_dups, rows, canon, rows-canon, raw_out_tok, canon_out, n_ws, n_proj))
     con.commit(); con.close()
 
     print(f"mode={'reuse' if args.reuse_manifest else 'fresh'} files={len(files)} "
           f"raw_lines={raw_lines} parse_errors={parse_err} exact_dups_dropped={exact_dups}")
     print(f"rows_stored={rows} canonical={canon} non_canonical={rows-canon}")
-    print(f"raw_out_tok={raw_out_tok:,} canonical_out_tok={canon_out:,} workspaces={n_ws}")
+    print(f"raw_out_tok={raw_out_tok:,} canonical_out_tok={canon_out:,} "
+          f"workspaces={n_ws} projects={n_proj}")
     print(f"elapsed={time.time()-t0:.1f}s db={args.db}")
 
 if __name__ == "__main__":

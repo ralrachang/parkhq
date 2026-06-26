@@ -21,11 +21,12 @@ def main():
     con = sqlite3.connect(args.db); c = con.cursor()
 
     runs = c.execute("""SELECT run_id,mode,files_seen,raw_lines,parse_errors,exact_dups_dropped,
-        rows_stored,rows_canonical,rows_non_canonical,raw_out_tok,canonical_out_tok,distinct_workspaces
+        rows_stored,rows_canonical,rows_non_canonical,raw_out_tok,canonical_out_tok,distinct_workspaces,
+        distinct_projects
         FROM ingest_runs ORDER BY run_id DESC LIMIT 2""").fetchall()
     run = runs[0]
     (_, mode, files_seen, raw_lines, perr, exact_dups, stored, canon, noncanon,
-     raw_out, canon_out, n_ws) = run
+     raw_out, canon_out, n_ws, n_proj) = run
 
     # ── 독립 재계산: 매니페스트의 각 파일을 검증기가 직접 다시 읽어
     #    (1) 첫 phys_lines 줄을 sha256 재계산(G7 무결성)  (2) 비어있지 않은 줄을 직접 계수(G1) ──
@@ -64,6 +65,14 @@ def main():
         "AND workspace_id IS NULL").fetchone()[0]
     worktree_left = c.execute("SELECT COUNT(*) FROM workspaces "
         "WHERE norm_cwd LIKE '%\\.claude\\worktrees\\%' ESCAPE '\\'").fetchone()[0]
+    # ── 프로젝트 루트 롤업 정합 ──
+    unmapped_proj = c.execute("SELECT COUNT(*) FROM records WHERE workspace_id IS NOT NULL "
+        "AND project_id IS NULL").fetchone()[0]
+    n_proj_tbl = c.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
+    distinct_proj_rec = c.execute("SELECT COUNT(DISTINCT project_id) FROM records "
+        "WHERE project_id IS NOT NULL").fetchone()[0]
+    proj_recsum = c.execute("SELECT COALESCE(SUM(n_records),0) FROM projects").fetchone()[0]
+    mapped_rec = c.execute("SELECT COUNT(*) FROM records WHERE project_id IS NOT NULL").fetchone()[0]
     # cross-session non-canonical(가시화 INFO): 같은 uuid가 여러 sessionId에 걸친 잔존 그룹
     nc_cross = c.execute("SELECT COUNT(*) FROM (SELECT uuid FROM records WHERE uuid IS NOT NULL "
         "GROUP BY uuid HAVING COUNT(*)>1 AND COUNT(DISTINCT session_id)>1)").fetchone()[0]
@@ -96,6 +105,12 @@ def main():
          f"match={m_match} mismatch={m_mismatch} missing={m_missing} / {len(manifest)}files"),
         ("G8a 워크스페이스 매핑 누락 0(cwd 있으나 ws NULL)", unmapped_ws == 0, f"{unmapped_ws}"),
         ("G8b worktree 병합: 잔존 worktree 경로 0", worktree_left == 0, f"{worktree_left}"),
+        ("G9a 롤업 매핑 누락 0(ws 있으나 project NULL)", unmapped_proj == 0, f"{unmapped_proj}"),
+        ("G9b projects 정합: 행수 == records distinct project_id", n_proj_tbl == distinct_proj_rec,
+         f"{n_proj_tbl} == {distinct_proj_rec}"),
+        ("G9c 롤업 축소: projects ≤ workspaces", n_proj_tbl <= n_ws, f"{n_proj_tbl} ≤ {n_ws}"),
+        ("G9d 레코드 보존: Σprojects.n_records == 매핑 레코드", proj_recsum == mapped_rec,
+         f"{proj_recsum:,} == {mapped_rec:,}"),
         ("G5  토큰: canonical(진실) ≤ raw, 둘 다 >0", 0 < canon_out <= raw_out,
          f"raw={raw_out:,} canonical={canon_out:,} (dedup 과대 {raw_out-canon_out:,}, "
          f"{100*(raw_out-canon_out)/raw_out:.1f}%)"),
@@ -121,6 +136,8 @@ def main():
     print("-"*76)
     print(f"files(동결)={files_seen}  rows_stored={stored:,}  canonical={canon:,}  "
           f"non_canonical(보관)={noncanon:,}  workspaces={n_ws}")
+    print(f"[INFO] 프로젝트 루트 롤업: workspaces {n_ws} → projects {n_proj_tbl}  "
+          f"(오염 하위폴더 {n_ws-n_proj_tbl}개 병합)")
     print(f"[INFO] cross-session 잔존 그룹(가시화)={nc_cross}  "
           f"| 매니페스트 rec_lines합={man_rec_sum:,}")
     print(f"[INFO] non-canonical 보관분 타입별: {nc_break_s}  "
