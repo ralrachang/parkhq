@@ -21,9 +21,9 @@ docs/01_next_ops_board.md. 참고 레이아웃: ex.jpg (HAM MEDIA OS '작업 전
 로컬 전용, 절대 커밋 금지(.gitignore: workos/*.html).
 
 ⚠️ 아래 설정은 사용자 확정 대기(잠정값). 확정되면 이 dict만 고치면 됨:
-   PROJECT_CATEGORY(#1) · CATEGORY_AGENT·PROJECT_AGENT(#2) · ops_signals.IDLE_*(#3) ·
-   ops_signals.doc_grade(#4) · recommend()(#5) · NOISE_NAMES(비프로젝트 처리).
-보류(데이터/규칙 필요): 민감도 축(▲민감/◆주의) · 상태=수정/승인/읽기 컬럼 · cwd-NULL 세션 완전귀속.
+   PROJECT_CATEGORY(#1) · PROJECT_SENSITIVITY(#1b) · CATEGORY_AGENT·PROJECT_AGENT(#2) ·
+   ops_signals.IDLE_*(#3) · ops_signals.doc_grade(#4) · recommend()(#5) · NOISE_NAMES(비프로젝트 처리).
+보류(데이터/규칙 필요): 상태=수정/승인/읽기 컬럼 · cwd-NULL 세션 완전귀속.
 사용법: python ops_board.py [--db ./workos.db] [--out ./ops_board.html]
 """
 import argparse, html, os, sqlite3, sys
@@ -40,32 +40,53 @@ except Exception:
 # ── 잠정 설정 (사용자 확정 대기) ──────────────────────────────────────
 CATEGORY_ORDER = ["부동산·빌딩", "제품·플랫폼", "콘텐츠·실험", "인프라·내부"]
 
-# #1 프로젝트 → 카테고리. 규칙: '부동산 도메인이면 작업유형 불문 부동산·빌딩'(도메인 우선),
-#    그 외는 기능축(제품/콘텐츠/인프라). (매핑 비평가 지적 반영)
+# #1 프로젝트 → 카테고리 (사용자 확정 2026-06-29). 본업=부동산·빌딩, 그 외는 기능축.
 PROJECT_CATEGORY = {
-    # 부동산·빌딩 (도메인 우선): IM=빌딩매매 제안서, kordoc=부동산 법률
-    "Building scope": "부동산·빌딩", "builpago": "부동산·빌딩", "building sns": "부동산·빌딩",
-    "wonbuilding AI TF": "부동산·빌딩", "매수고객관리": "부동산·빌딩", "yangjae_NI": "부동산·빌딩",
-    "Auto IM pptx": "부동산·빌딩", "Auto IM2": "부동산·빌딩", "kordoc": "부동산·빌딩",
-    # 제품·플랫폼 (일반 SaaS/도구 제품)
-    "diwolbu": "제품·플랫폼", "team ERP": "제품·플랫폼", "Taxpago": "제품·플랫폼",
+    # 부동산·빌딩 (본업)
+    "yangjae_NI": "부동산·빌딩", "building sns": "부동산·빌딩", "wonbuilding AI TF": "부동산·빌딩",
+    "Auto IM2": "부동산·빌딩", "매수고객관리": "부동산·빌딩",
+    # 제품·플랫폼
+    "Building scope": "제품·플랫폼", "builpago": "제품·플랫폼", "diwolbu": "제품·플랫폼",
+    "Taxpago": "제품·플랫폼", "team ERP": "제품·플랫폼",
     # 콘텐츠·실험
-    "remotion_youtube": "콘텐츠·실험", "dungeon writer": "콘텐츠·실험", "godot": "콘텐츠·실험",
-    "ppt yoon": "콘텐츠·실험", "worldcup dashboard": "콘텐츠·실험",
-    # 인프라·내부 (사내 자동화·데이터 도구)
-    "데일리 작업로그": "인프라·내부", "notion work": "인프라·내부", "korea-finance": "인프라·내부",
+    "worldcup dashboard": "콘텐츠·실험", "dungeon writer": "콘텐츠·실험", "remotion_youtube": "콘텐츠·실험",
+    # 인프라·내부
+    "데일리 작업로그": "인프라·내부", "carendar": "인프라·내부",  # carendar: 새 프로젝트, 로그 쌓이면 표시
 }
-DEFAULT_CATEGORY = "미분류"          # 미매핑 시 조용히 흡수하지 않고 '미분류'로 노출
+DEFAULT_CATEGORY = "미분류"          # 미매핑 시 '미분류'로 노출
 
-# #2 담당 에이전트(Hermes). 카테고리 기본 + 프로젝트별 오버라이드.
+# #2 담당 에이전트 (사용자 확정 2026-06-29): 부동산·빌딩=서연, 그 외 전부=유나.
 CATEGORY_AGENT = {
-    "부동산·빌딩": "서연 (CSO)", "제품·플랫폼": "유나 (CTO)",
-    "인프라·내부": "유나 (CTO)", "콘텐츠·실험": "하린 (CLO)", "미분류": "미지정",
+    "부동산·빌딩": "서연 (CSO)",
+    "제품·플랫폼": "유나 (CTO)", "콘텐츠·실험": "유나 (CTO)", "인프라·내부": "유나 (CTO)",
+    "미분류": "미지정",
 }
-PROJECT_AGENT = {}                   # 예: {"Taxpago": "하린 (CLO)"} — 비면 카테고리 기준
+PROJECT_AGENT = {}                   # 프로젝트별 오버라이드(비면 카테고리 기준)
+
+# #1b 민감도 축(ex.jpg 'A. 민감도' 재현) — 프로젝트별 데이터 민감도.
+#    방치도(●◆▲)와 글리프 충돌 피하려 민감도는 '색 점 + 라벨' 칩으로 표기.
+#    ⚠️ 잠정 분류(사용자 확정 대기) — 아래 dict만 고치면 됨.
+SENSITIVITY_ORDER = ["대외비", "내부", "공개"]
+PROJECT_SENSITIVITY = {
+    # 대외비: 고객·매물·매출·세무·사장님 보고 등 실데이터/내부 의사결정
+    "매수고객관리": "대외비", "wonbuilding AI TF": "대외비", "team ERP": "대외비",
+    "Taxpago": "대외비", "Auto IM pptx": "대외비", "Auto IM2": "대외비",
+    # 공개: 외부 발행물(SNS 카드뉴스·영상·공개 대시보드)
+    "building sns": "공개", "builpago": "공개", "remotion_youtube": "공개",
+    "worldcup dashboard": "공개",
+    # 내부: 미공개 제품·사내 도구·실험 (기본값)
+    "Building scope": "내부", "diwolbu": "내부", "kordoc": "내부",
+    "korea-finance": "내부", "notion work": "내부", "데일리 작업로그": "내부",
+    "godot": "내부", "dungeon writer": "내부", "yangjae_NI": "내부", "ppt yoon": "내부",
+}
+DEFAULT_SENSITIVITY = "내부"          # 미매핑 시 보수적으로 '내부'
+SENS_META = {"대외비": "secret", "내부": "internal", "공개": "public"}  # 라벨 → CSS class
 
 # 비프로젝트 버킷(컨테이너 루트 활동·임시 폴더) — 집계/컬럼에서 격리, '기타'로 별도 표기.
 NOISE_NAMES = {"claude_project", "remember project"}
+
+# 표시 제외(사용자 지정 2026-06-29) — 점검대에서 완전히 숨김(컬럼·집계·타임라인 제외).
+HIDDEN_NAMES = {"kordoc", "Auto IM pptx", "godot", "ppt yoon", "korea-finance", "notion work"}
 
 # #5 환경 조성: 상태별 추천 액션(동사 중심·간결).
 def recommend(r):
@@ -151,6 +172,14 @@ padding:0 6px;font-size:10px;font-weight:600}
 .tag.A{color:var(--ok)}.tag.B{color:var(--tagB)}
 .tag.C{color:var(--warn)}
 .tag.none,.tag.gone{color:var(--bad)}
+.sens{display:inline-flex;align-items:center;gap:4px;border-radius:5px;padding:0 6px;font-size:10px;font-weight:600;border:1px solid}
+.sens::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.sens.secret{color:var(--bad);background:var(--idle-bg);border-color:var(--idle-bd)}
+.sens.internal{color:var(--warn);background:var(--act-bg);border-color:var(--act-bd)}
+.sens.public{color:var(--ok);background:var(--badge-bg);border-color:var(--badge-bd)}
+.sdot{display:inline-block;width:8px;height:8px;border-radius:50%;vertical-align:middle;margin-right:3px}
+.sdot.secret{background:var(--bad)}.sdot.internal{background:var(--warn)}.sdot.public{background:var(--ok)}
+.chip.sep{border:0;padding:7px 2px;color:var(--mut)}
 .pbody{padding:0 12px 12px;border-top:1px solid var(--bd);margin-top:2px;font-size:12px;color:var(--mut)}
 .pbody .focus{color:var(--fg);margin:8px 0 6px}
 .pbody .fsrc{color:var(--mut);font-size:10.5px}
@@ -193,10 +222,12 @@ def assign(rows, db_path):
     for r in rows:
         if r["name"] in NOISE_NAMES:
             r["category"], r["agent"], r["is_noise"] = "기타", "—", True
+            r["sensitivity"] = None
         else:
             cat = PROJECT_CATEGORY.get(r["name"], DEFAULT_CATEGORY)
             r["category"] = cat
             r["agent"] = PROJECT_AGENT.get(r["name"]) or CATEGORY_AGENT.get(cat, "미지정")
+            r["sensitivity"] = PROJECT_SENSITIVITY.get(r["name"], DEFAULT_SENSITIVITY)
             r["is_noise"] = False
         c.execute("UPDATE projects SET category=?, agent=? WHERE project_id=?",
                   (r["category"], r["agent"], r["project_id"]))
@@ -209,12 +240,14 @@ def card_html(r, n):
     badge = f'<span class="bidle">{days}일 방치</span>' if r["status"] == "방치" else ""
     trcls = TREND_CLS[r["trend"]]
     docdisp = DOC_DISP.get(r["doc"], r["doc"])
+    sens = r.get("sensitivity")
+    sens_pill = f'<span class="sens {SENS_META[sens]}">{esc(sens)}</span>' if sens else ""
     focus = r["focus"] or "—"
     fsrc = f' <span class="fsrc">({esc(r["focus_src"])})</span>' if r["focus_src"] else ""
     return (
         f'<details class="pc {cls}"><summary>'
         f'<div class="pname"><span class="num">{n}</span>'
-        f'<span class="dot {cls}">{icon}</span>{esc(r["name"])}{badge}</div>'
+        f'<span class="dot {cls}">{icon}</span>{esc(r["name"])}{sens_pill}{badge}</div>'
         f'<div class="pmeta">'
         f'<span class="g">{days}일 전</span>'
         f'<span class="tr {trcls}">추세 {r["trend"]}{TREND_LABEL[r["trend"]]}</span>'
@@ -291,6 +324,9 @@ def headquarters_html(here):
 def tips_html():
     return ('<details class="sec"><summary>활용 팁 — 점검대 읽는 법</summary><div class="secbody sub">'
             '<div>· <b>플래그</b>: ● 활발(최근 활동) · ◆ 식어감(주춤) · ▲ 방치(15일+ 방치) — 컬럼 위쪽일수록 손길 필요.</div>'
+            '<div>· <b>민감도</b>: <span class="sens secret">대외비</span>(고객·매출·내부의사결정) '
+            '<span class="sens internal">내부</span>(미공개 제품·사내도구) '
+            '<span class="sens public">공개</span>(외부 발행물) — 이름 옆 색 점 칩.</div>'
             '<div>· <b>추세</b>: ↑ 늘어남(초록) · ↓ 줄어듦(빨강, 조기경보) · = 정체. 최근 14일 vs 직전 14일 세션 수.</div>'
             '<div>· <b>문서등급</b>: A(README+가이드+docs) · B(README+가이드) · C(일부) · 없음 · 폴더없음.</div>'
             '<div>· <b>추천 액션</b>: 방치=재점화 브리프, 식어감=주간 점검, 문서부족=보강. (담당 에이전트가 수행 — Phase 3)</div>'
@@ -346,22 +382,29 @@ def main():
     args = ap.parse_args()
 
     now_date, rows = ops_signals.compute(args.db)
+    rows = [r for r in rows if r["name"] not in HIDDEN_NAMES]   # 사용자 지정 숨김 제외
     assign(rows, args.db)
 
     real = [r for r in rows if not r["is_noise"]]
     noise = [r for r in rows if r["is_noise"]]
 
     sc = Counter(r["status"] for r in real)
+    sens_ct = Counter(r["sensitivity"] for r in real if r.get("sensitivity"))
     doc_need = sum(1 for r in real if r["doc"] in ("없음", "경로없음"))
     total = len(real)
     gen = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
 
+    sens_chips = "".join(
+        f'<div class="chip"><b>{sens_ct.get(k, 0)}</b> <span class="sdot {SENS_META[k]}"></span>{k}</div>'
+        for k in SENSITIVITY_ORDER)
     aggbar = (
         f'<div class="chip"><b>{total}</b> 전체</div>'
         f'<div class="chip ok"><b>{sc["활발"]}</b> ● 활발</div>'
         f'<div class="chip warn"><b>{sc["식어감"]}</b> ◆ 식어감</div>'
         f'<div class="chip bad"><b>{sc["방치"]}</b> ▲ 방치</div>'
         f'<div class="chip"><b>{doc_need}</b> 문서 점검</div>'
+        f'<div class="chip sep">·</div>'
+        f'{sens_chips}'
     )
 
     by_cat = {}
@@ -392,7 +435,7 @@ def main():
         f'<div class="wrap">'
         f'<h1>작업 전 점검대<span class="badge">🔒 로컬 전용</span></h1>'
         f'<div class="sub">기준일 {now_date} · <span class="ok-t">게이트 16/16 PASS</span>'
-        f'<span class="prov">분류·담당 잠정</span></div>'
+        f'<span class="prov">분류·담당·민감도 잠정</span></div>'
         f'<div class="aggbar">{aggbar}</div>'
         f'<div class="cols">{cols}</div>'
         f'{timeline_html(real, now_date)}'
@@ -402,11 +445,12 @@ def main():
         f'<h2>지표 (20%) — 전체 활동 요약</h2><div class="metrics">{metrics_body}</div>'
         f'<div class="foot">'
         f'생성 {gen} (KST) · 데이터 {drange[0]}~{drange[1]} (KST) · 기준일(now)=DB max(ts·KST)={now_date}(시계 무관).<br>'
-        f'원천: Claude Code 세션 로그 → workos.db(프로젝트 루트 롤업 {total}개 + 비프로젝트 {len(noise)}개 격리) · '
+        f'원천: Claude Code 세션 로그 → workos.db(프로젝트 루트 롤업 · 표시 {total}개 + 비프로젝트 {len(noise)}개 격리 + 표시제외 {len(HIDDEN_NAMES)}개) · '
         f'무결성 게이트 16/16 PASS · 토큰=canonical(dedup 진실값).<br>'
-        f'80% 운영 점검대(방치 감지) + 20% 지표 + 에이전트 레이어(카테고리→담당 + 카드별 추천 액션).<br>'
-        f'보류(후속): 민감도 축(▲민감/◆주의, 분류규칙 필요) · 상태=수정/승인/읽기 컬럼(데이터 갭) · '
-        f'cwd-NULL 세션 완전귀속. <b>이 파일은 로컬 전용</b>(세션제목·고객명 포함 가능, 커밋 금지).'
+        f'표시 제외(사용자 지정 {len(HIDDEN_NAMES)}): {esc(" · ".join(sorted(HIDDEN_NAMES)))}.<br>'
+        f'80% 운영 점검대(방치 감지) + 민감도 축 + 20% 지표 + 에이전트 레이어(카테고리→담당 + 카드별 추천 액션).<br>'
+        f'보류(후속): 상태=수정/승인/읽기 컬럼(데이터 갭) · cwd-NULL 세션 완전귀속. '
+        f'<b>이 파일은 로컬 전용</b>(세션제목·고객명 포함 가능, 커밋 금지).'
         f'</div></div></body></html>'
     )
 
