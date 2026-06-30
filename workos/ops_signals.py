@@ -30,26 +30,26 @@ except Exception:
 # KST 날짜부 추출식 — now/last/first/추세 윈도우 모두 이걸로 통일.
 KDATE = "substr(datetime(ts,'+9 hours'),1,10)"
 
-# 방치 임계값(일) — 사용자 확정 #3 대기(잠정). [경계는 '이하' 포함]
-IDLE_TODAY, IDLE_FEW, IDLE_WEEK, IDLE_TWOWK = 0, 3, 7, 14
+# 방치 임계값(일) — 사용자 확정 #3 (2026-06-30): 활발 ≤7 · 식어감 8–21 · 방치 22+. [경계는 '이하' 포함]
+IDLE_TODAY, IDLE_WEEK, IDLE_2WK, IDLE_3WK = 0, 7, 14, 21
 
 def idle_bucket(days):
     if days is None:        return "오래"
     if days <= IDLE_TODAY:  return "오늘"
-    if days <= IDLE_FEW:    return "3일"
-    if days <= IDLE_WEEK:   return "주간"
-    if days <= IDLE_TWOWK:  return "2주"
+    if days <= IDLE_WEEK:   return "이번주"
+    if days <= IDLE_2WK:    return "2주"
+    if days <= IDLE_3WK:    return "3주"
     return "오래"
 
 # 운영 상태(플래그) = 순수 방치도. 추세는 별도 신호로 분리 표기(글리프 충돌 제거).
-#   활발 ●(오늘/3일) · 식어감 ◆(주간/2주) · 방치 ▲(오래)
+#   활발 ●(오늘/이번주, ≤7일) · 식어감 ◆(2주/3주, 8–21일) · 방치 ▲(오래, 22일+)
 def op_status(bucket):
     if bucket == "오래":          return "방치"
-    if bucket in ("주간", "2주"): return "식어감"
+    if bucket in ("2주", "3주"):  return "식어감"
     return "활발"
 
 def doc_grade(root):
-    """프로젝트 폴더 실측 → 문서등급. 사용자 확정 #4 대기(잠정 정의)."""
+    """프로젝트 폴더 실측 → 문서등급. 사용자 확정 #4 (2026-06-30): 현행 휴리스틱 유지."""
     if not root or not os.path.isdir(root):
         return "경로없음"
     try:

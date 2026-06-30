@@ -20,9 +20,10 @@ docs/01_next_ops_board.md. 참고 레이아웃: ex.jpg (HAM MEDIA OS '작업 전
 민감(세션제목·고객명) 포함 가능 →
 로컬 전용, 절대 커밋 금지(.gitignore: workos/*.html).
 
-⚠️ 아래 설정은 사용자 확정 대기(잠정값). 확정되면 이 dict만 고치면 됨:
-   PROJECT_CATEGORY(#1) · PROJECT_SENSITIVITY(#1b) · CATEGORY_AGENT·PROJECT_AGENT(#2) ·
-   ops_signals.IDLE_*(#3) · ops_signals.doc_grade(#4) · recommend()(#5) · NOISE_NAMES(비프로젝트 처리).
+사용자 확정 완료(조정은 이 dict만 고치면 됨):
+   #1 PROJECT_CATEGORY · #1b PROJECT_SENSITIVITY · #2 CATEGORY_AGENT·PROJECT_AGENT (2026-06-29)
+   #3 ops_signals.IDLE_*(활발≤7·식어감8–21·방치22+) · #4 ops_signals.doc_grade(현행 휴리스틱) (2026-06-30)
+   잠정: #5 recommend() · NOISE_NAMES(비프로젝트 처리).
 보류(데이터/규칙 필요): 상태=수정/승인/읽기 컬럼 · cwd-NULL 세션 완전귀속.
 사용법: python ops_board.py [--db ./workos.db] [--out ./ops_board.html]
 """
@@ -47,7 +48,7 @@ PROJECT_CATEGORY = {
     "Auto IM2": "부동산·빌딩", "매수고객관리": "부동산·빌딩",
     # 제품·플랫폼
     "Building scope": "제품·플랫폼", "builpago": "제품·플랫폼", "diwolbu": "제품·플랫폼",
-    "Taxpago": "제품·플랫폼", "team ERP": "제품·플랫폼",
+    "Taxpago": "제품·플랫폼", "team ERP": "제품·플랫폼", "diwolbu web": "제품·플랫폼",  # diwolbu web: 신규(2026-06-30)
     # 콘텐츠·실험
     "worldcup dashboard": "콘텐츠·실험", "dungeon writer": "콘텐츠·실험", "remotion_youtube": "콘텐츠·실험",
     # 인프라·내부
@@ -75,7 +76,7 @@ PROJECT_SENSITIVITY = {
     "building sns": "공개", "builpago": "공개", "remotion_youtube": "공개",
     "worldcup dashboard": "공개",
     # 내부: 미공개 제품·사내 도구·실험 (기본값)
-    "Building scope": "내부", "diwolbu": "내부", "kordoc": "내부",
+    "Building scope": "내부", "diwolbu": "내부", "diwolbu web": "내부", "kordoc": "내부",
     "korea-finance": "내부", "notion work": "내부", "데일리 작업로그": "내부",
     "godot": "내부", "dungeon writer": "내부", "yangjae_NI": "내부", "ppt yoon": "내부",
 }
