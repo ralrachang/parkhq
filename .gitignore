@@ -1,5 +1,6 @@
 # 자격증명/비밀 (절대 커밋 금지)
 .git-credentials
+.worklog-git-token.txt
 *.token
 *.pat
 .env
