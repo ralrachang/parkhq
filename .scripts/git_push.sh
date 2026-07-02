@@ -20,12 +20,15 @@ cd "$WORK" || exit 1
 if git clone --depth 1 "https://${TOKEN}@${HOSTPATH}" repo 2>/dev/null; then cd repo
 else mkdir repo && cd repo && git init -b main >/dev/null 2>&1 && git remote add origin "https://${TOKEN}@${HOSTPATH}"; fi
 git config user.name "Park"; git config user.email "ralrachang@gmail.com"
-cat > .gitignore <<'G'
+# .gitignore는 저장소에 없을 때만 생성(init 폴백용) — 매번 덮어쓰면 로컬 repo의
+# 보호규칙(workos/*.db 등)을 원격에서 지워버려 로컬·원격이 매일 갈라진다(2026-07-02 실측).
+if [ ! -f .gitignore ]; then cat > .gitignore <<'G'
 .worklog-git-token.txt
 *.token
 *.pat
 .env*
 G
+fi
 cp -f "$LOGDIR"/*.md ./ 2>/dev/null
 git add -A
 if git diff --cached --quiet; then echo "NO_CHANGES_TO_PUSH"; exit 0; fi
