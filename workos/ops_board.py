@@ -14,6 +14,8 @@ docs/01_next_ops_board.md. 참고 레이아웃: ex.jpg (HAM MEDIA OS '작업 전
   에이전트 레이어: 카테고리→담당 + 프로젝트 오버라이드 + 카드별 추천 액션(환경 조성).
 
 신호 계산은 ops_signals.compute()(probe_ops 대체)에 위임 — 단일 출처.
+카드별 🤖 AI 상태 코멘트는 ops_comments.py가 사전 생성(DB ops_comments 테이블,
+evidence_hash 캐시) — 파이프라인: ingest → verify_gate → ops_comments → ops_board.
 비프로젝트 버킷(컨테이너 루트·임시 폴더)은 NOISE_NAMES로 격리해 집계 왜곡 방지.
 의존성 0·자체완결 HTML·JS 없음(펼치기는 <details>, 다크/라이트 토글은 순수 CSS :has()).
 기본은 다크, 우상단 버튼으로 라이트 전환(새로고침 시 다크로 초기화 — 기억엔 JS 필요).
@@ -188,6 +190,9 @@ padding:0 6px;font-size:10px;font-weight:600}
 .pbody .nums div{background:var(--card2);border-radius:6px;padding:6px 8px}
 .pbody .nums b{color:var(--fg);font-size:13px;display:block}
 .act{margin-top:8px;color:var(--act-fg);background:var(--act-bg);border:1px solid var(--act-bd);border-radius:6px;padding:7px 9px}
+.aicmt{margin:8px 0;color:var(--fg);background:var(--card2);border:1px solid var(--bd);
+border-left:3px solid var(--acc);border-radius:6px;padding:8px 10px;line-height:1.55;font-size:12px}
+.aicmt .cmtat{color:var(--mut);font-size:10px;margin-top:5px}
 .path{font-family:ui-monospace,Consolas,monospace;font-size:10.5px;word-break:break-all;color:var(--path);margin-top:6px}
 h2{font-size:14px;margin:34px 0 10px}
 details.sec{margin-top:14px;background:var(--card);border:1px solid var(--bd);border-radius:10px}
@@ -215,6 +220,17 @@ a.doclink{color:var(--acc);text-decoration:none;font-size:12px}a.doclink:hover{t
 
 def esc(s):
     return html.escape(str(s) if s is not None else "")
+
+
+def load_comments(db_path):
+    """ops_comments.py가 생성한 프로젝트별 AI 상태 코멘트. 테이블 없으면 빈 dict(하위호환)."""
+    con = sqlite3.connect(db_path)
+    try:
+        rows = con.execute("SELECT project_id, comment, generated_at FROM ops_comments").fetchall()
+    except sqlite3.OperationalError:
+        rows = []
+    con.close()
+    return {pid: (cmt, gen) for pid, cmt, gen in rows}
 
 
 def assign(rows, db_path):
@@ -245,6 +261,10 @@ def card_html(r, n):
     sens_pill = f'<span class="sens {SENS_META[sens]}">{esc(sens)}</span>' if sens else ""
     focus = r["focus"] or "—"
     fsrc = f' <span class="fsrc">({esc(r["focus_src"])})</span>' if r["focus_src"] else ""
+    cmt = r.get("ai_comment")
+    cmt_html = (f'<div class="aicmt">🤖 {esc(cmt)}'
+                f'<div class="cmtat">AI 코멘트 · {esc(r.get("ai_comment_at") or "")} KST · 실측 데이터 기반</div></div>'
+                if cmt else "")
     return (
         f'<details class="pc {cls}"><summary>'
         f'<div class="pname"><span class="num">{n}</span>'
@@ -257,6 +277,7 @@ def card_html(r, n):
         f'</div></summary>'
         f'<div class="pbody">'
         f'<div class="focus">초점: {esc(focus)}{fsrc}</div>'
+        f'{cmt_html}'
         f'<div class="nums">'
         f'<div><b>{days}일 전</b>최근 {esc(r["last"])}</div>'
         f'<div><b>{r["sessions"]}</b>세션 · 입력 {r["human"]}</div>'
@@ -331,7 +352,9 @@ def tips_html():
             '<div>· <b>추세</b>: ↑ 늘어남(초록) · ↓ 줄어듦(빨강, 조기경보) · = 정체. 최근 14일 vs 직전 14일 세션 수.</div>'
             '<div>· <b>문서등급</b>: A(README+가이드+docs) · B(README+가이드) · C(일부) · 없음 · 폴더없음.</div>'
             '<div>· <b>추천 액션</b>: 방치=재점화 브리프, 식어감=주간 점검, 문서부족=보강. (담당 에이전트가 수행 — Phase 3)</div>'
-            '<div>· 카드를 클릭하면 초점·세션·토큰·시작일·경로가 펼쳐집니다.</div>'
+            '<div>· 카드를 클릭하면 초점·<b>🤖 AI 상태 코멘트</b>·세션·토큰·시작일·경로가 펼쳐집니다.</div>'
+            '<div>· <b>🤖 코멘트</b>: 실측 데이터(방치도·추세·최근 세션 제목·입력) 기반 요약+다음 액션. '
+            '갱신은 <code>ops_comments.py</code> 실행(근거 데이터가 바뀐 프로젝트만 재생성).</div>'
             '<div style="margin-top:6px;color:var(--prov-fg)">· 카테고리·담당·임계값·문서등급은 <b>잠정값</b>입니다(확정 5건 대기). '
             'ops_board.py 상단 dict에서 조정하세요.</div>'
             '</div></details>')
@@ -385,6 +408,9 @@ def main():
     now_date, rows = ops_signals.compute(args.db)
     rows = [r for r in rows if r["name"] not in HIDDEN_NAMES]   # 사용자 지정 숨김 제외
     assign(rows, args.db)
+    comments = load_comments(args.db)                            # ops_comments.py 산출(없으면 빈 dict)
+    for r in rows:
+        r["ai_comment"], r["ai_comment_at"] = comments.get(r["project_id"], (None, None))
 
     real = [r for r in rows if not r["is_noise"]]
     noise = [r for r in rows if r["is_noise"]]
