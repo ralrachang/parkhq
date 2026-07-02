@@ -12,6 +12,11 @@ PARK HQ Work OS — Phase 1a 적재기 (PC 로컬 SQLite 정규화).
   ts) 채택, 나머지는 is_canonical=0 으로 **보관**(사용자 결정: 감사용).
 - 토큰 합계/집계는 canonical 레코드만.
 - 결측 방어: CC 30버전 전체에서 무중단(없는 필드 NULL).
+- cwd 결측 봉투 레코드(last-prompt·queue-operation·file-history-snapshot·started·result
+  등, 실측 11,428행·토큰/입력 가중치 0)는 같은 파일의 형제 라인 cwd로 workspace/project
+  분류만 폴백(직전 cwd 우선, 선행 구간은 파일 첫 cwd). cwd 컬럼은 원본 그대로(NULL)
+  보존, 폴백 건수는 ingest_runs.rows_cwd_inferred에 기록. cwd는 VOLATILE이라
+  content_hash·멱등성에 영향 없음.
 
 라이브 데이터 대응(중요):
   세션 로그는 살아 자란다(우리 작업 세션 포함). 그래서 적재 시작 시점에 파일별
@@ -97,7 +102,8 @@ CREATE TABLE IF NOT EXISTS ingest_runs (
   files_seen INTEGER, raw_lines INTEGER, parse_errors INTEGER,
   exact_dups_dropped INTEGER, rows_stored INTEGER, rows_canonical INTEGER,
   rows_non_canonical INTEGER, raw_out_tok INTEGER, canonical_out_tok INTEGER,
-  distinct_workspaces INTEGER, distinct_projects INTEGER
+  distinct_workspaces INTEGER, distinct_projects INTEGER,
+  rows_cwd_inferred INTEGER
 );
 """
 
@@ -114,6 +120,27 @@ def normalize_cwd(cwd):
 
 def ws_id(norm):
     return hashlib.sha1(norm.encode("utf-8")).hexdigest()[:16] if norm else None
+
+def first_ncwd_in_file(path, limit):
+    """파일 앞부분(동결 경계 내)에서 처음 나오는 non-NULL 정규화 cwd.
+    선행 결측 레코드(파일 첫 cwd 등장 이전 줄)의 폴백 분류용. 없으면 None."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for i, line in enumerate(fh, 1):
+                if limit is not None and i > limit:
+                    break
+                s = line.strip()
+                if not s:
+                    continue
+                try:
+                    n = normalize_cwd(json.loads(s).get("cwd"))
+                except Exception:
+                    continue
+                if n:
+                    return n
+    except Exception:
+        pass
+    return None
 
 # ── 프로젝트 루트 롤업 ───────────────────────────────────────────────
 # workspaces(cwd 정규화)는 하위 폴더(engine·output·_qa·scripts…)로 오염된다(실측 65개).
@@ -169,6 +196,10 @@ def main():
 
     con = sqlite3.connect(args.db)
     con.executescript(DDL)
+    try:    # 구스키마 DB에 --reuse-manifest로 붙는 경우 대비(신규 DB는 DDL에 포함)
+        con.execute("ALTER TABLE ingest_runs ADD COLUMN rows_cwd_inferred INTEGER")
+    except sqlite3.OperationalError:
+        pass
     cur = con.cursor()
 
     # 경계(watermark): reuse-manifest면 직전 files 테이블에서, 아니면 동결(EOF까지 읽고 기록)
@@ -183,7 +214,8 @@ def main():
         cur.execute("DELETE FROM files")
 
     t0 = time.time()
-    raw_lines = parse_err = raw_out_tok = 0
+    raw_lines = parse_err = raw_out_tok = cwd_inferred = 0
+    pmap_live = {}   # 적재 중 만난 모든 pid→(name,root). 폴백 전용 pid의 projects 보강용.
     rec_b, tool_b, tres_b, perr_b, file_b = [], [], [], [], []
     BATCH = 4000
 
@@ -213,6 +245,8 @@ def main():
         limit = bound.get(f)            # reuse면 물리 줄 경계
         h = hashlib.sha256()
         phys = rec = 0
+        fb_ncwd = pre_ncwd = None       # cwd 폴백: 직전 cwd / 파일 첫 cwd(선행 구간용)
+        prescanned = False
         with fh:
             for phys_idx, line in enumerate(fh, 1):
                 if limit is not None and phys_idx > limit:
@@ -229,12 +263,25 @@ def main():
                     parse_err += 1; perr_b.append((f, phys_idx, str(e)[:200])); continue
                 ch = content_hash(o)
                 cwd = o.get("cwd"); ncwd = normalize_cwd(cwd)
+                if ncwd:
+                    fb_ncwd = ncwd
+                else:
+                    # cwd 결측 봉투 레코드 → 같은 파일 형제 라인 cwd로 분류만 폴백.
+                    # cwd 컬럼은 원본(NULL) 보존 — ws/proj 파생 컬럼만 채운다.
+                    if fb_ncwd is None and not prescanned:
+                        prescanned = True
+                        pre_ncwd = first_ncwd_in_file(f, limit)
+                    ncwd = fb_ncwd or pre_ncwd
+                    if ncwd is not None:
+                        cwd_inferred += 1
                 msg = o.get("message") if isinstance(o.get("message"), dict) else {}
                 usage = msg.get("usage") or {}; rtype = o.get("type", "<none>")
                 if rtype == "assistant":
                     raw_out_tok += (usage.get("output_tokens") or 0)
                 origin = o.get("origin") or {}
-                pid = derive_project(ncwd)[0]
+                pid, pname, proot = derive_project(ncwd)
+                if pid is not None:
+                    pmap_live[pid] = (pname, proot)
                 rec_b.append((ch, o.get("uuid"), o.get("parentUuid"), o.get("sessionId"), rtype,
                     cwd, ws_id(ncwd), pid, o.get("timestamp"), msg.get("model"),
                     usage.get("input_tokens"), usage.get("output_tokens"),
@@ -290,6 +337,11 @@ def main():
         pid, pname, proot = derive_project(normalize_cwd(cwd))
         if pid is not None:
             pmap[pid] = (pname, proot)
+    # 폴백 분류로만 존재하는 pid(저장 cwd 없음)를 적재 시 수집한 매핑으로 보강.
+    # records에 실재하는 pid만 추가 → G9b(projects 행수 == distinct project_id) 정합 유지.
+    for (pid,) in cur.execute("SELECT DISTINCT project_id FROM records WHERE project_id IS NOT NULL"):
+        if pid not in pmap and pid in pmap_live:
+            pmap[pid] = pmap_live[pid]
     cur.executemany("INSERT INTO projects (project_id,project_name,project_root) VALUES (?,?,?)",
                     [(pid, nm, rt) for pid, (nm, rt) in pmap.items()])
     cur.execute("""UPDATE projects SET
@@ -307,17 +359,18 @@ def main():
     exact_dups = raw_lines - parse_err - rows
     cur.execute("""INSERT INTO ingest_runs (started_at,finished_at,mode,files_seen,raw_lines,
         parse_errors,exact_dups_dropped,rows_stored,rows_canonical,rows_non_canonical,
-        raw_out_tok,canonical_out_tok,distinct_workspaces,distinct_projects)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        raw_out_tok,canonical_out_tok,distinct_workspaces,distinct_projects,rows_cwd_inferred)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (t0, time.time(), "reuse" if args.reuse_manifest else "fresh", len(files), raw_lines,
-         parse_err, exact_dups, rows, canon, rows-canon, raw_out_tok, canon_out, n_ws, n_proj))
+         parse_err, exact_dups, rows, canon, rows-canon, raw_out_tok, canon_out, n_ws, n_proj,
+         cwd_inferred))
     con.commit(); con.close()
 
     print(f"mode={'reuse' if args.reuse_manifest else 'fresh'} files={len(files)} "
           f"raw_lines={raw_lines} parse_errors={parse_err} exact_dups_dropped={exact_dups}")
     print(f"rows_stored={rows} canonical={canon} non_canonical={rows-canon}")
     print(f"raw_out_tok={raw_out_tok:,} canonical_out_tok={canon_out:,} "
-          f"workspaces={n_ws} projects={n_proj}")
+          f"workspaces={n_ws} projects={n_proj} cwd_inferred={cwd_inferred}")
     print(f"elapsed={time.time()-t0:.1f}s db={args.db}")
 
 if __name__ == "__main__":

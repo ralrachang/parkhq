@@ -221,7 +221,7 @@ def main():
     sc = Counter(r["status"] for r in rows); bc = Counter(r["bucket"] for r in rows)
     dc = Counter(r["doc"] for r in rows)
     print(f"상태: 활발 {sc['활발']} · 식어감 {sc['식어감']} · 방치 {sc['방치']}")
-    print("방치도: " + " · ".join(f"{k} {bc[k]}" for k in ("오늘", "3일", "주간", "2주", "오래") if bc[k]))
+    print("방치도: " + " · ".join(f"{k} {bc[k]}" for k in ("오늘", "이번주", "2주", "3주", "오래") if bc[k]))
     print("문서등급: " + " · ".join(f"{k} {dc[k]}" for k in ("A", "B", "C", "없음", "경로없음") if dc[k]))
 
 if __name__ == "__main__":
