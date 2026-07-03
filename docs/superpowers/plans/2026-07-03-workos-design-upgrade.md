@@ -40,7 +40,7 @@
   - `fmt_si(v: float) -> str` — 1234→"1k", 2.3e6→"2.3M"
   - `esc(s) -> str` — html.escape 래퍼(None 허용)
 
-- [ ] **Step 1: theme.py 작성** — 아래 코드 전체를 `workos/theme.py`로 저장
+- [x] **Step 1: theme.py 작성** — 아래 코드 전체를 `workos/theme.py`로 저장
 
 ```python
 #!/usr/bin/env python3
@@ -220,7 +220,7 @@ def page_head(title):
             f'<title>{esc(title)}</title><style>{css()}</style></head><body>')
 ```
 
-- [ ] **Step 2: 스모크 테스트 실행**
+- [x] **Step 2: 스모크 테스트 실행**
 
 Run (프로젝트 루트에서):
 ```bash
@@ -239,7 +239,7 @@ print('theme.py smoke OK')
 ```
 Expected: `theme.py smoke OK` (실패 시 assert 메시지 확인 후 수정)
 
-- [ ] **Step 3: 커밋**
+- [x] **Step 3: 커밋**
 
 ```bash
 git add workos/theme.py
@@ -259,13 +259,13 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Consumes: Task 1의 `theme.page_head/theme_toggle/daily_bars_svg/kpi/esc/fmt_si`
 - Produces: 없음 (말단 생성기)
 
-- [ ] **Step 1: import 추가** — 파일 상단 `import argparse, html, os, sqlite3, sys` 아래에:
+- [x] **Step 1: import 추가** — 파일 상단 `import argparse, html, os, sqlite3, sys` 아래에:
 
 ```python
 import theme
 ```
 
-- [ ] **Step 2: 수동 SVG 생성부 삭제** — `# 일별 SVG 막대` 주석부터 `svgw = max(...)`까지(현 106~115행)와 CSS `<style>` 블록 전체를 제거하고, `HTML = f"""` 블록을 아래로 교체. `daily`는 `(day, sess, tok)` 3-튜플이므로 `[(d, t) for d, _, t in daily]`로 넘긴다.
+- [x] **Step 2: 수동 SVG 생성부 삭제** — `# 일별 SVG 막대` 주석부터 `svgw = max(...)`까지(현 106~115행)와 CSS `<style>` 블록 전체를 제거하고, `HTML = f"""` 블록을 아래로 교체. `daily`는 `(day, sess, tok)` 3-튜플이므로 `[(d, t) for d, _, t in daily]`로 넘긴다.
 
 ```python
     HTML = (
@@ -322,7 +322,7 @@ import theme
 
 주의: 기존 f-string 안의 `html.escape(...)` 호출들(model_rows·recent_rows 등 사전 조립부)은 그대로 둔다. 삭제 대상은 `<style>…</style>`을 포함한 옛 `HTML = f"""<!doctype html>…"""` 블록과 수동 SVG 조립부뿐.
 
-- [ ] **Step 3: 재생성 + 마커 검증**
+- [x] **Step 3: 재생성 + 마커 검증**
 
 ```bash
 cd workos && python dashboard.py && python -c "
@@ -336,9 +336,9 @@ print('dashboard markers OK', len(h))
 ```
 Expected: `dashboard markers OK` + 바이트 수(대략 15k~25k)
 
-- [ ] **Step 4: 시각 확인** — Playwright MCP로 `file:///D:/claude_project/데일리 작업로그/workos/dashboard.html` 열고 스크린샷. 토글 라벨 클릭 후 라이트 모드도 1장. 확인 포인트: 겹침·잘림 없음, y축 눈금 표시, KPI 위계, 라이트/다크 모두 텍스트 가독.
+- [x] **Step 4: 시각 확인** — Playwright MCP로 `file:///D:/claude_project/데일리 작업로그/workos/dashboard.html` 열고 스크린샷. 토글 라벨 클릭 후 라이트 모드도 1장. 확인 포인트: 겹침·잘림 없음, y축 눈금 표시, KPI 위계, 라이트/다크 모두 텍스트 가독.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add workos/dashboard.py
@@ -358,9 +358,9 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Consumes: Task 1의 `theme.page_head/theme_toggle/daily_bars_svg/kpi/fmt_si`
 - Produces: 없음 (말단 생성기)
 
-- [ ] **Step 1: import 추가** — `import ops_signals` 위에 `import theme` 추가.
+- [x] **Step 1: import 추가** — `import ops_signals` 위에 `import theme` 추가.
 
-- [ ] **Step 2: CSS 상수 교체** — 기존 `CSS = """…"""`(110~218행)를 아래 **페이지 고유 CSS만** 남긴 버전으로 교체. 토큰·베이스·KPI·테이블·차트는 theme이 제공하므로 삭제하고, 옛 페이지 변수는 theme 토큰 별칭으로 연결한다.
+- [x] **Step 2: CSS 상수 교체** — 기존 `CSS = """…"""`(110~218행)를 아래 **페이지 고유 CSS만** 남긴 버전으로 교체. 토큰·베이스·KPI·테이블·차트는 theme이 제공하므로 삭제하고, 옛 페이지 변수는 theme 토큰 별칭으로 연결한다.
 
 ```python
 CSS = """
@@ -446,7 +446,7 @@ a.doclink{color:var(--acc);text-decoration:none;font-size:12px}a.doclink:hover{t
 
 주의: ops_board의 h1은 28px이 기본이 되며(theme), h2는 페이지 CSS에서 16px로 재정의(점검대 섹션 제목은 밀도상 작게 유지 — 대시보드 h2 20px과 구분되는 의도적 예외).
 
-- [ ] **Step 3: `metrics_strip()`의 SVG 조립 교체** — `dmax = …`부터 `svgw = …`까지 삭제하고 `body` 조립을 아래로:
+- [x] **Step 3: `metrics_strip()`의 SVG 조립 교체** — `dmax = …`부터 `svgw = …`까지 삭제하고 `body` 조립을 아래로:
 
 ```python
     kpis = (
@@ -462,7 +462,7 @@ a.doclink{color:var(--acc);text-decoration:none;font-size:12px}a.doclink:hover{t
     return drange, body
 ```
 
-- [ ] **Step 4: `main()` 문서 조립 교체** — `doc = (…)`의 head·toolbar 부분을 theme 호출로:
+- [x] **Step 4: `main()` 문서 조립 교체** — `doc = (…)`의 head·toolbar 부분을 theme 호출로:
 
 ```python
     doc = (
@@ -481,7 +481,7 @@ a.doclink{color:var(--acc);text-decoration:none;font-size:12px}a.doclink:hover{t
 
 정확한 조립 순서: `theme.page_head(...) + f'<style>{CSS}</style>' + theme.theme_toggle() + f'<div class="wrap">…'`. 기존 `<!doctype …><style>{CSS}</style></head><body><div class="toolbar">…` 조립부와 `.metrics` 클래스 사용처(1곳)만 바뀐다. `.badge`→`.pill lock`, `.prov`→`.pill prov`로의 치환은 h1·sub 라인의 2곳.
 
-- [ ] **Step 5: 재생성 + 마커 검증**
+- [x] **Step 5: 재생성 + 마커 검증**
 
 ```bash
 cd workos && python ops_board.py && python -c "
@@ -495,9 +495,9 @@ print('ops_board markers OK', len(h))
 ```
 Expected: `ops_board markers OK` + 바이트 수(대략 40k~60k)
 
-- [ ] **Step 6: 시각 확인** — Playwright로 `file:///…/ops_board.html` 다크/라이트 스크린샷. 확인 포인트: 카드 상태 레일(ok/warn/bad) 색, 민감도 칩 가독, 컬럼 4→2→1 반응형, AI 코멘트 블록.
+- [x] **Step 6: 시각 확인** — Playwright로 `file:///…/ops_board.html` 다크/라이트 스크린샷. 확인 포인트: 카드 상태 레일(ok/warn/bad) 색, 민감도 칩 가독, 컬럼 4→2→1 반응형, AI 코멘트 블록.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add workos/ops_board.py
@@ -516,23 +516,23 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: Task 1~3 전부 완료 상태
 
-- [ ] **Step 1: 데이터 레이어 무변경 확인**
+- [x] **Step 1: 데이터 레이어 무변경 확인**
 
 ```bash
 cd workos && python verify_gate.py
 ```
 Expected: 게이트 16/16 PASS (하나라도 FAIL이면 중단하고 원인 보고 — 디자인 작업이 데이터를 건드렸다는 뜻)
 
-- [ ] **Step 2: 4장 스크린샷 최종 확인** — 두 페이지 × 다크/라이트. dataviz 최종 체크: 라벨 겹침·잘림 없음, 그리드는 배경으로 물러남, 상태색이 글리프·라벨과 항상 병기, 축 눈금 값이 어중간하지 않음(1/2/5 스케일).
+- [x] **Step 2: 4장 스크린샷 최종 확인** — 두 페이지 × 다크/라이트. dataviz 최종 체크: 라벨 겹침·잘림 없음, 그리드는 배경으로 물러남, 상태색이 글리프·라벨과 항상 병기, 축 눈금 값이 어중간하지 않음(1/2/5 스케일).
 
-- [ ] **Step 3: 민감 파일 보호 확인**
+- [x] **Step 3: 민감 파일 보호 확인**
 
 ```bash
 git status --short
 ```
 Expected: `workos/*.html` 이 목록에 **없어야** 함(.gitignore 동작). 나타나면 .gitignore 확인 후 수정.
 
-- [ ] **Step 4: 계획 문서 체크박스 갱신 + 잔여 커밋**
+- [x] **Step 4: 계획 문서 체크박스 갱신 + 잔여 커밋**
 
 ```bash
 git add docs/superpowers/plans/2026-07-03-workos-design-upgrade.md
@@ -540,3 +540,15 @@ git commit -m "Work OS 디자인 업그레이드 완료: 계획 체크박스 갱
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
+
+---
+
+## 검증 결과 (2026-07-03 실행 기록)
+
+- theme.py 스모크: PASS · dashboard 마커: PASS(19,727B) · ops_board 마커: PASS(38,199B)
+- 스크린샷 4장(두 페이지 × 다크/라이트) 육안 확인: 겹침·잘림 없음, y축 눈금·호버 툴팁 동작, 카드 펼침(AI 코멘트) 정상. 발견 결함 1건(KPI 보조텍스트 CJK 개행) 즉시 수정.
+- `workos/*.html`·`*.png`·`.playwright-mcp/` 모두 .gitignore 커버 확인 — 공개 repo 유출 없음.
+- verify_gate: **14/16** — G1(디스크 줄 수 192,832≠동결 204,414)·G7(동결 553파일 중 16개 소실, mismatch 0) FAIL.
+  원인: 원천 세션 로그 드리프트(Claude Code가 agent-*.jsonl 등 트랜스크립트 정리 + 신규 14파일 적재 대기).
+  디자인 작업과 무관(본 작업은 workos/*.py UI 코드만 변경, verify_gate·ingest·DB 무변경).
+  후속: 다음 증분 적재(ingest) 때 재동결하면 해소 — 데이터 레이어 소관.
