@@ -75,7 +75,7 @@ box-shadow:var(--shadow);padding:18px 20px}
 .kpi{background:var(--card);border:1px solid var(--bd);border-radius:var(--r);
 box-shadow:var(--shadow);padding:16px 18px 14px}
 .kpi .v{font-size:30px;font-weight:750;letter-spacing:-.01em;line-height:1.15}
-.kpi .v .ks{font-size:13px;font-weight:600;color:var(--mut);margin-left:2px}
+.kpi .v .ks{font-size:13px;font-weight:600;color:var(--mut);margin-left:2px;white-space:nowrap}
 .kpi .l{color:var(--mut);font-size:12px;margin-top:5px}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--bd)}
