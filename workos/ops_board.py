@@ -32,6 +32,7 @@ evidence_hash 캐시) — 파이프라인: ingest → verify_gate → ops_commen
 import argparse, html, os, sqlite3, sys
 from collections import Counter
 from datetime import datetime, timezone, timedelta
+import theme
 import ops_signals
 from ops_signals import days_between, TREND_LABEL, KDATE
 
@@ -108,83 +109,61 @@ DOC_DISP = {"경로없음": "폴더없음"}
 KST = timezone(timedelta(hours=9))
 
 CSS = """
-/* 기본 = 라이트(GitHub 라이트 팔레트). 우상단 토글로 다크 전환(순수 CSS :has, JS 없음). */
-:root{--bg:#ffffff;--card:#ffffff;--card2:#f3f6f9;--bd:#d0d7de;--fg:#1f2328;--mut:#59636e;
---ok:#1a7f37;--warn:#9a6700;--bad:#cf222e;--acc:#0969da;
---badge-bg:#dafbe1;--badge-fg:#1a7f37;--badge-bd:#aceebb;
---prov-bg:#fff8c5;--prov-fg:#7d4e00;--prov-bd:#eac54f;
---idle-bg:#ffebe9;--idle-fg:#cf222e;--idle-bd:#ffaba8;
---act-bg:#fff8c5;--act-fg:#7d4e00;--act-bd:#eac54f;
---tagB:#0969da;--track:#eaeef2;--path:#6e7781;--grad2:#54aeff;
---warn-tint:rgba(154,103,0,.07);--bad-tint:rgba(207,34,46,.06);}
-:root:has(#themechk:checked){--bg:#0d1117;--card:#161b22;--card2:#1c2230;--bd:#30363d;
---fg:#e6edf3;--mut:#8b949e;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--acc:#3b82f6;
---badge-bg:#0f2a1a;--badge-fg:#3fb950;--badge-bd:#1f5135;
---prov-bg:#2a210f;--prov-fg:#e3b341;--prov-bd:#51421f;
---idle-bg:#3b1d1d;--idle-fg:#ff7b72;--idle-bd:#5c2a2a;
---act-bg:#1d1a0f;--act-fg:#e3b341;--act-bd:#51421f;
---tagB:#9fd1ff;--track:#0d1117;--path:#6e7681;--grad2:#60a5fa;
---warn-tint:rgba(245,158,11,.05);--bad-tint:rgba(239,68,68,.08);}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font-size:14px;transition:background .15s,color .15s;
-font-family:'Pretendard',-apple-system,'Segoe UI',Roboto,'Malgun Gothic',sans-serif}
-.wrap{max-width:1320px;margin:0 auto;padding:24px 20px 70px}
-h1{font-size:21px;margin:0 0 4px;padding-right:110px}
-.sub{color:var(--mut);font-size:12.5px;line-height:1.6}
+/* ops_board 페이지 고유 — 토큰·베이스·컴포넌트는 theme.py가 제공 */
+:root{--tagB:var(--acc);--path:var(--faint);
+--badge-bg:var(--ok-bg);--badge-fg:var(--ok);--badge-bd:transparent;
+--prov-bg:var(--warn-bg);--prov-fg:var(--warn);--prov-bd:transparent;
+--idle-bg:var(--bad-bg);--idle-fg:var(--bad);--idle-bd:transparent;
+--act-bg:var(--warn-bg);--act-fg:var(--warn);--act-bd:transparent;
+--warn-tint:var(--warn-bg);--bad-tint:var(--bad-bg);}
 .badge{display:inline-block;background:var(--badge-bg);color:var(--badge-fg);border:1px solid var(--badge-bd);
-border-radius:6px;padding:2px 9px;font-size:11.5px;font-weight:600;margin-left:6px}
+border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:600;margin-left:6px}
 .prov{display:inline-block;background:var(--prov-bg);color:var(--prov-fg);border:1px solid var(--prov-bd);
-border-radius:6px;padding:2px 8px;font-size:11px;margin-left:6px}
-.toolbar{position:fixed;top:12px;right:14px;z-index:20}
-.vh{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.themebtn{display:inline-block;cursor:pointer;background:var(--card);border:1px solid var(--bd);
-color:var(--fg);border-radius:8px;padding:6px 11px;font-size:12px;font-weight:600;user-select:none}
-.themebtn:hover{border-color:var(--acc)}
-.themebtn::before{content:"🌙 다크"}
-:root:has(#themechk:checked) .themebtn::before{content:"☀️ 라이트"}
-.vh:focus-visible + .themebtn{outline:2px solid var(--acc);outline-offset:2px}
-.aggbar{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 4px}
-.chip{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:7px 12px;font-size:12.5px}
-.chip b{font-size:15px;font-weight:700}
+border-radius:999px;padding:2px 9px;font-size:11px;margin-left:6px}
+.aggbar{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 4px}
+.chip{background:var(--card);border:1px solid var(--bd);border-radius:999px;padding:7px 14px;
+font-size:12.5px;box-shadow:var(--shadow)}
+.chip b{font-size:15px;font-weight:750}
 .chip.ok b{color:var(--ok)}.chip.warn b{color:var(--warn)}.chip.bad b{color:var(--bad)}
+.chip.sep{border:0;padding:7px 2px;color:var(--mut);box-shadow:none}
 .legend{color:var(--mut);font-size:11.5px;margin:8px 0 18px;line-height:1.7}
-.cols{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:start}
+.cols{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:start;margin-top:14px}
 @media(max-width:1100px){.cols{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:640px){.cols{grid-template-columns:1fr}}
-.colhead{border-bottom:2px solid var(--bd);padding-bottom:8px;margin-bottom:10px}
+.colhead{border-bottom:2px solid var(--bd2);padding-bottom:9px;margin-bottom:10px}
 .colhead .ct{font-size:14.5px;font-weight:700}
 .colhead .ca{color:var(--acc);font-size:12px;font-weight:600}
 .colhead .cs{color:var(--mut);font-size:11.5px;margin-top:3px}
 .cardbox{display:flex;flex-direction:column;gap:8px}
-details.pc{background:var(--card);border:1px solid var(--bd);border-radius:9px;
-border-left:3px solid var(--bd);overflow:hidden}
+details.pc{background:var(--card);border:1px solid var(--bd);border-radius:var(--r);
+border-left:3px solid var(--bd2);overflow:hidden;box-shadow:var(--shadow)}
 details.pc.ok{border-left-color:var(--ok)}
 details.pc.warn{border-left-color:var(--warn);background:var(--warn-tint)}
 details.pc.bad{border-left-color:var(--bad);background:var(--bad-tint)}
-details.pc>summary{list-style:none;cursor:pointer;padding:10px 12px}
+details.pc>summary{list-style:none;cursor:pointer;padding:11px 13px}
 details.pc>summary::-webkit-details-marker{display:none}
+details.pc>summary:hover{background:var(--card2)}
 .pname{font-size:13.5px;font-weight:650;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.num{color:var(--mut);font-size:11px;font-variant-numeric:tabular-nums;min-width:16px}
+.num{color:var(--faint);font-size:11px;font-variant-numeric:tabular-nums;min-width:16px}
 .dot{font-size:11px}.dot.ok{color:var(--ok)}.dot.warn{color:var(--warn)}.dot.bad{color:var(--bad)}
-.bidle{background:var(--idle-bg);color:var(--idle-fg);border:1px solid var(--idle-bd);border-radius:5px;
-padding:0 6px;font-size:10px;font-weight:600}
+.bidle{background:var(--idle-bg);color:var(--idle-fg);border:1px solid var(--idle-bd);border-radius:999px;
+padding:0 7px;font-size:10px;font-weight:600}
 .pmeta{color:var(--mut);font-size:11.5px;margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 10px}
 .pmeta .g{color:var(--fg)}
 .tr.up{color:var(--ok)}.tr.down{color:var(--bad)}.tr.flat{color:var(--mut)}
 .tag{border:1px solid var(--bd);border-radius:5px;padding:0 6px;font-size:10.5px}
-.tag.A{color:var(--ok)}.tag.B{color:var(--tagB)}
-.tag.C{color:var(--warn)}
+.tag.A{color:var(--ok)}.tag.B{color:var(--tagB)}.tag.C{color:var(--warn)}
 .tag.none,.tag.gone{color:var(--bad)}
-.sens{display:inline-flex;align-items:center;gap:4px;border-radius:5px;padding:0 6px;font-size:10px;font-weight:600;border:1px solid}
+.sens{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:0 7px;
+font-size:10px;font-weight:600;border:1px solid}
 .sens::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
 .sens.secret{color:var(--bad);background:var(--idle-bg);border-color:var(--idle-bd)}
 .sens.internal{color:var(--warn);background:var(--act-bg);border-color:var(--act-bd)}
 .sens.public{color:var(--ok);background:var(--badge-bg);border-color:var(--badge-bd)}
 .sdot{display:inline-block;width:8px;height:8px;border-radius:50%;vertical-align:middle;margin-right:3px}
 .sdot.secret{background:var(--bad)}.sdot.internal{background:var(--warn)}.sdot.public{background:var(--ok)}
-.chip.sep{border:0;padding:7px 2px;color:var(--mut)}
-.pbody{padding:0 12px 12px;border-top:1px solid var(--bd);margin-top:2px;font-size:12px;color:var(--mut)}
-.pbody .focus{color:var(--fg);margin:8px 0 6px}
+.pbody{padding:0 13px 13px;border-top:1px solid var(--bd);margin-top:2px;font-size:12px;color:var(--mut)}
+.pbody .focus{color:var(--fg);margin:9px 0 6px}
 .pbody .fsrc{color:var(--mut);font-size:10.5px}
 .pbody .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}
 .pbody .nums div{background:var(--card2);border-radius:6px;padding:6px 8px}
@@ -192,29 +171,21 @@ padding:0 6px;font-size:10px;font-weight:600}
 .act{margin-top:8px;color:var(--act-fg);background:var(--act-bg);border:1px solid var(--act-bd);border-radius:6px;padding:7px 9px}
 .aicmt{margin:8px 0;color:var(--fg);background:var(--card2);border:1px solid var(--bd);
 border-left:3px solid var(--acc);border-radius:6px;padding:8px 10px;line-height:1.55;font-size:12px}
-.aicmt .cmtat{color:var(--mut);font-size:10px;margin-top:5px}
+.aicmt .cmtat{color:var(--faint);font-size:10px;margin-top:5px}
 .path{font-family:ui-monospace,Consolas,monospace;font-size:10.5px;word-break:break-all;color:var(--path);margin-top:6px}
-h2{font-size:14px;margin:34px 0 10px}
-details.sec{margin-top:14px;background:var(--card);border:1px solid var(--bd);border-radius:10px}
+h2{font-size:16px;margin:36px 0 10px}
+details.sec{margin-top:14px;background:var(--card);border:1px solid var(--bd);border-radius:var(--r);box-shadow:var(--shadow)}
 details.sec>summary{cursor:pointer;padding:12px 16px;font-weight:600;font-size:13.5px;list-style:none}
 details.sec>summary::-webkit-details-marker{display:none}
 details.sec>summary::before{content:"▸ ";color:var(--mut)}
 details.sec[open]>summary::before{content:"▾ "}
 .secbody{padding:0 16px 16px}
 .tl{display:flex;align-items:center;gap:10px;margin:5px 0;font-size:11.5px}
-.tl .tln{width:130px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl .tln{width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tl .tlt{flex:1;background:var(--track);border-radius:4px;height:12px;position:relative}
-.tl .tlb{position:absolute;height:100%;background:linear-gradient(90deg,var(--acc),var(--grad2));border-radius:4px;min-width:3px}
+.tl .tlb{position:absolute;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc-soft));border-radius:4px;min-width:3px}
 .tl .tld{width:150px;color:var(--mut);text-align:right;font-variant-numeric:tabular-nums}
-.metrics{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px 16px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
-.kpi{background:var(--card2);border-radius:8px;padding:10px 12px}
-.kpi .v{font-size:20px;font-weight:700}.kpi .l{color:var(--mut);font-size:11px;margin-top:2px}
-.chartwrap{margin-top:14px;overflow-x:auto}
-svg text.dx{fill:var(--mut);font-size:9px;text-anchor:middle}rect.db{fill:var(--acc)}
 a.doclink{color:var(--acc);text-decoration:none;font-size:12px}a.doclink:hover{text-decoration:underline}
-.foot{margin-top:30px;color:var(--mut);font-size:11px;border-top:1px solid var(--bd);padding-top:12px;line-height:1.7}
-.ok-t{color:var(--ok);font-weight:600}
 """
 
 
@@ -375,26 +346,16 @@ def metrics_strip(db_path):
     daily = c.execute(f"""SELECT {KDATE} d,
         COALESCE(SUM(CASE WHEN is_canonical=1 AND rec_type='assistant' THEN out_tok END),0)
         FROM records WHERE ts IS NOT NULL GROUP BY d ORDER BY d""").fetchall()[-35:]
-    dmax = max((d[1] for d in daily), default=1) or 1
-    bw, gap, H = 24, 7, 130
-    svg = []
-    for i, (day, tok) in enumerate(daily):
-        h = (H - 22) * tok / dmax; x = i * (bw + gap)
-        svg.append(f'<rect x="{x}" y="{H-h-16:.0f}" width="{bw}" height="{h:.0f}" rx="3" class="db"></rect>')
-        if i % 3 == 0:
-            svg.append(f'<text x="{x+bw/2:.0f}" y="{H-2}" class="dx">{day[5:]}</text>')
-    svgw = max(len(daily) * (bw + gap), 100)
     kpis = (
-        f'<div class="kpi"><div class="v">{n_ws_active}<span style="font-size:12px;color:var(--mut)"> / {n_ws}</span></div><div class="l">활동 워크스페이스</div></div>'
-        f'<div class="kpi"><div class="v">{n_sess:,}</div><div class="l">세션</div></div>'
-        f'<div class="kpi"><div class="v">{n_human:,}</div><div class="l">사람 입력(typed)</div></div>'
-        f'<div class="kpi"><div class="v">{tout/1e6:.1f}M</div><div class="l">출력 토큰(진실)</div></div>'
-        f'<div class="kpi"><div class="v">{stored:,}</div><div class="l">정규화 레코드</div></div>'
+        theme.kpi(f'{n_ws_active}', '활동 워크스페이스', sub=f'/ {n_ws}')
+        + theme.kpi(f'{n_sess:,}', '세션')
+        + theme.kpi(f'{n_human:,}', '사람 입력(typed)')
+        + theme.kpi(f'{tout/1e6:.1f}M', '출력 토큰(진실)')
+        + theme.kpi(f'{stored:,}', '정규화 레코드')
     )
-    body = (f'<div class="kpis">{kpis}</div>'
-            f'<div class="chartwrap"><svg width="100%" height="{H}" viewBox="0 0 {svgw} {H}" '
-            f'preserveAspectRatio="xMinYMid meet" style="max-width:{svgw}px;min-width:{min(svgw,560)}px">{"".join(svg)}</svg></div>'
-            f'<div class="sub">일별 출력 토큰(최근 {len(daily)}일, KST) — 작업 산출 강도 대리지표</div>')
+    body = (f'<div class="kpis" style="margin-top:0">{kpis}</div>'
+            + theme.daily_bars_svg(daily, height=130)
+            + f'<div class="sub">일별 출력 토큰(최근 {len(daily)}일, KST) — 작업 산출 강도 대리지표</div>')
     return drange, body
 
 
@@ -454,14 +415,12 @@ def main():
     drange, metrics_body = metrics_strip(args.db)
 
     doc = (
-        f'<!doctype html><html lang="ko"><head><meta charset="utf-8">'
-        f'<meta name="viewport" content="width=device-width,initial-scale=1">'
-        f'<title>PARK HQ Work OS — 작업 전 점검대</title><style>{CSS}</style></head><body>'
-        f'<div class="toolbar"><input type="checkbox" id="themechk" class="vh">'
-        f'<label for="themechk" class="themebtn" title="다크/라이트 전환"></label></div>'
-        f'<div class="wrap">'
-        f'<h1>작업 전 점검대<span class="badge">🔒 로컬 전용</span></h1>'
-        f'<div class="sub">기준일 {now_date} · <span class="ok-t">게이트 16/16 PASS</span>'
+        theme.page_head("PARK HQ Work OS — 작업 전 점검대")
+        + f'<style>{CSS}</style>'
+        + theme.theme_toggle()
+        + f'<div class="wrap">'
+        f'<h1>작업 전 점검대<span class="pill lock">🔒 로컬 전용</span></h1>'
+        f'<div class="sub">기준일 {now_date} · <span class="pill pass">게이트 16/16 PASS</span>'
         f'<span class="prov">분류·담당·민감도 잠정</span></div>'
         f'<div class="aggbar">{aggbar}</div>'
         f'<div class="cols">{cols}</div>'
@@ -469,7 +428,7 @@ def main():
         f'{noise_html}'
         f'{headquarters_html(here)}'
         f'{tips_html()}'
-        f'<h2>지표 (20%) — 전체 활동 요약</h2><div class="metrics">{metrics_body}</div>'
+        f'<h2>지표 (20%) — 전체 활동 요약</h2><div class="card">{metrics_body}</div>'
         f'<div class="foot">'
         f'생성 {gen} (KST) · 데이터 {drange[0]}~{drange[1]} (KST) · 기준일(now)=DB max(ts·KST)={now_date}(시계 무관).<br>'
         f'원천: Claude Code 세션 로그 → workos.db(프로젝트 루트 롤업 · 표시 {total}개 + 비프로젝트 {len(noise)}개 격리 + 표시제외 {len(HIDDEN_NAMES)}개) · '
