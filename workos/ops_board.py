@@ -52,10 +52,12 @@ PROJECT_CATEGORY = {
     # 제품·플랫폼
     "Building scope": "제품·플랫폼", "builpago": "제품·플랫폼", "diwolbu": "제품·플랫폼",
     "Taxpago": "제품·플랫폼", "team ERP": "제품·플랫폼", "diwolbu web": "제품·플랫폼",  # diwolbu web: 신규(2026-06-30)
+    "howmuch.go": "제품·플랫폼",  # 신규(2026-07-04)
     # 콘텐츠·실험
     "worldcup dashboard": "콘텐츠·실험", "dungeon writer": "콘텐츠·실험", "remotion_youtube": "콘텐츠·실험",
     # 인프라·내부
     "데일리 작업로그": "인프라·내부", "carendar": "인프라·내부",  # carendar: 새 프로젝트, 로그 쌓이면 표시
+    "mer's blog": "인프라·내부",  # 신규(2026-07-04)
 }
 DEFAULT_CATEGORY = "미분류"          # 미매핑 시 '미분류'로 노출
 
