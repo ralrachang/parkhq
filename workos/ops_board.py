@@ -49,6 +49,7 @@ PROJECT_CATEGORY = {
     # 부동산·빌딩 (본업)
     "yangjae_NI": "부동산·빌딩", "building sns": "부동산·빌딩", "wonbuilding AI TF": "부동산·빌딩",
     "Auto IM2": "부동산·빌딩", "매수고객관리": "부동산·빌딩",
+    "sise-web": "부동산·빌딩", "naver land": "부동산·빌딩",  # 확정(2026-07-09) — 부동산 시세·매물
     # 제품·플랫폼
     "Building scope": "제품·플랫폼", "builpago": "제품·플랫폼", "diwolbu": "제품·플랫폼",
     "Taxpago": "제품·플랫폼", "team ERP": "제품·플랫폼", "diwolbu web": "제품·플랫폼",  # diwolbu web: 신규(2026-06-30)
