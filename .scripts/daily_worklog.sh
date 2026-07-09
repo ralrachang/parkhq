@@ -22,10 +22,28 @@ LOGFILE="$LOGDIR/$D.md"
 
 log(){ echo "[$(date '+%F %T')] $*" | tee -a "$RUNLOG"; }
 
+# Work OS 대시보드 재생성 — 세션 로그 재적재(--fresh) 후 HTML 2종 갱신.
+# md 로그 유무와 무관하게 매 실행 호출(세션 데이터는 매일 증가). HTML/DB는 gitignore(로컬 전용) → push 없음.
+# python 은 로그인 셸(-lc, 스케줄러와 동일)에서 /c/Python314/python 로 잡힘.
+refresh_workos(){
+  WK="$LOGDIR/workos"
+  [ -f "$WK/ingest.py" ] || { log "workos: ingest.py 없음 — 재생성 건너뜀"; return 0; }
+  log "workos: 적재+대시보드 재생성 시작"
+  if python "$WK/ingest.py" --fresh >> "$RUNLOG" 2>&1; then
+    python "$WK/ops_comments.py" >> "$RUNLOG" 2>&1 || log "workos: ops_comments 경고(무시)"
+    if python "$WK/ops_board.py" >> "$RUNLOG" 2>&1; then log "workos: ops_board.html 갱신"; else log "workos: ops_board 실패"; fi
+    if python "$WK/dashboard.py" >> "$RUNLOG" 2>&1; then log "workos: dashboard.html 갱신"; else log "workos: dashboard 실패"; fi
+  else
+    log "workos: ingest 실패 — 재생성 건너뜀"
+  fi
+}
+
 log "=== daily_worklog start (target=$D $DOW) ==="
 
 if [ -f "$LOGFILE" ]; then
-  log "ALREADY_EXISTS: $LOGFILE — 건너뜀"
+  log "ALREADY_EXISTS: $LOGFILE — md 생성 건너뜀"
+  refresh_workos
+  log "=== daily_worklog done ($D) ==="
   exit 0
 fi
 
@@ -67,16 +85,19 @@ D:\\\\claude_project 안 여러 프로젝트에서 그날 변경된 파일을 �
   fi
 fi
 
-# 2) 결과 검증
+# 2) 결과 검증 + push
 if [ ! -f "$LOGFILE" ]; then
   log "ERROR: $LOGFILE 가 생성되지 않음 — push 건너뜀"
-  exit 1
+else
+  log "로그 작성 완료: $LOGFILE ($(wc -c < "$LOGFILE") bytes)"
+  # 3) parkhq에 push
+  PUSHOUT="$(bash "$SCRIPT_DIR/git_push.sh" 2>&1)"
+  log "git_push: $(echo "$PUSHOUT" | tail -1)"
 fi
-log "로그 작성 완료: $LOGFILE ($(wc -c < "$LOGFILE") bytes)"
-
-# 3) parkhq에 push
-PUSHOUT="$(bash "$SCRIPT_DIR/git_push.sh" 2>&1)"
-log "git_push: $(echo "$PUSHOUT" | tail -1)"
 
 rm -f "$SCANTMP"
+
+# 4) Work OS 대시보드 재생성 (매 실행 — HTML/DB는 gitignore, push 없음)
+refresh_workos
+
 log "=== daily_worklog done ($D) ==="
